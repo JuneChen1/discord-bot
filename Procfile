@@ -1,2 +1,2 @@
-worker: bundle exec rake jobs:work
+worker: node app.js
 web: node app.js
