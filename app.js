@@ -52,7 +52,7 @@ client.on('messageCreate', message => {
   }
 
   if (message.content === '!wager') {
-    return message.reply('請輸入 !wager [籌碼數]')
+    return message.reply(`目前下注：${wager}`)
   }
   const order = message.content.split(' ')
   if (order[0] === '!wager' && order.length === 2 &&
