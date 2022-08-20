@@ -9,7 +9,21 @@
   
 ![IMG_0439_1](https://user-images.githubusercontent.com/103798145/185736750-1a9d396d-10b8-4b76-94bf-69d942de9f96.jpg)
 
-## .env 內容
+## 安裝流程
+1. 請確認有安裝 Node.js 與 npm
+2. 將專案 clone 到本地
+```
+git clone https://github.com/JuneChen1/discord-bot.git
+```
+3. 進入專案資料夾
+```
+cd discord
+```
+4. 安裝套件
+```
+npm install
+```
+#### .env 內容
 1. BOT_TOKEN  
 [Applitions](https://discord.com/developers/applications) -> Bot -> TOKEN
 
