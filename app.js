@@ -5,6 +5,7 @@ if (process.env.NODE_ENV !== 'production') {
 const createItems = require('./config/createItems')
 const readItems = require('./config/readItems')
 const updateItems = require('./config/updateItems')
+const deleteItems = require('./config/deleteItems')
 
 const { Client, GatewayIntentBits } = require('discord.js')
 const token = process.env.BOT_TOKEN
@@ -40,14 +41,13 @@ client.on('messageCreate', async message => {
     let wager = 0
     const discordUserId = message.author.id
     const user = await readItems(discordUserId)
-    if (user.length !== 0) {
+    if (user.Item) {
       wager = user.Item.Wager
     }
 
     if (message.content === '!win') {
       if (wager === 0) return message.reply('還沒下注喔～')
-      wager = 0
-      await updateItems(discordUserId, wager)
+      await deleteItems(discordUserId)
       return message.reply('恭喜獲利！')
     }
 
