@@ -16,7 +16,8 @@ function createItems (userId, wager) {
     TableName: table,
     Item: {
       'UserId': userId,
-      'Wager': wager
+      'Wager': wager,
+      'InitialWager': wager
     },
     ReturnValues: 'ALL_OLD'
   }

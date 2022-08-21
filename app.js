@@ -47,8 +47,9 @@ client.on('messageCreate', async message => {
 
     if (message.content === '!win') {
       if (wager === 0) return message.reply('還沒下注喔～')
+      initialWager = user.Item.InitialWager
       await deleteItems(discordUserId)
-      return message.reply('恭喜獲利！')
+      return message.reply(`恭喜獲利 ${initialWager}！`)
     }
 
     if (message.content === '!draw') {
