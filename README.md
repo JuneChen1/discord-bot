@@ -7,7 +7,8 @@
 ### 什麼是 Martingale Strategy?
 假設第一次下注10個籌碼，如果輸了下次就將籌碼加倍到20，再下一次變成40，一直加倍到贏了為止，在籌碼足夠的情況下，就能保證一定會獲利10個籌碼。  (現實中不推薦這麼做！因為錢不是無限的:neutral_face:)
   
-![IMG_0439_1](https://user-images.githubusercontent.com/103798145/185736750-1a9d396d-10b8-4b76-94bf-69d942de9f96.jpg)
+![IMG_0440_1](https://user-images.githubusercontent.com/103798145/185778920-ae3cdd79-221e-470b-902f-c64c9575f214.jpg)
+
 
 ## 安裝流程
 1. 請確認有安裝 Node.js 與 npm
