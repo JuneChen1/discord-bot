@@ -68,12 +68,26 @@ client.on('messageCreate', async message => {
       if (wager === 0) return message.reply('還沒下注喔～')
       return message.reply(`目前下注：${wager}`)
     }
+
+    if (message.content === '!timer') {
+      return message.reply('計時請輸入 !timer [分鐘數]')
+    }
+
     const order = message.content.split(' ')
+
     if (order[0] === '!wager' && order.length === 2 &&
       Number(order[1])) {
       wager = Number(order[1])
       await createItems(discordUserId, wager)
-      message.reply(`下注 ${wager}`)
+      return message.reply(`下注 ${wager}`)
+    }
+
+    if (order[0] === '!timer' && order.length === 2 &&
+      Number(order[1])) {
+      time = Number(order[1])
+      millisecond = time * 60000
+      message.reply(`開始計時 ${time} 分鐘`)
+      return setTimeout(() => message.reply(`時間到！`), millisecond)
     }
   } catch (err) {
     console.warn(err)
