@@ -3,7 +3,9 @@
 
 ## 功能
 + 計時器
-+ 籌碼下注紀錄
++ 籌碼下注紀錄 
+
+[全部指令](https://hackmd.io/@RG9cKZ2IS4C8Z69gXipgAA/rkv2nNDyj)
 
 ## 說明
 因為加入的一個 Discord 群組有擲骰子遊戲，想到之前聽過的 Martingale Strategy，就決定寫一個 bot 來設定下注的籌碼。
