@@ -28,70 +28,70 @@ client.on('interactionCreate', async interaction => {
 
   if (commandName === 'hi') {
     await interaction.reply(`hi～ ${interaction.user.username}`)
-  } else if (commandName === 'wager') {
-    await interaction.reply('下注請輸入 !wager [籌碼數]')
   }
 })
 
 client.on('messageCreate', async message => {
   if (!message.content.startsWith('!')) return
-
-  // timer
-  if (message.channelId === process.env.TIMER_CHANNEL_ID) {
-    if (message.content === '!timer') {
-      return message.reply('計時請輸入 !timer [分鐘數]')
-    }
-    const order = message.content.split(' ')
-    if (order[0] === '!timer' && order.length === 2 &&
-      Number(order[1])) {
-      const time = Number(order[1])
-      const millisecond = time * 60000
-      message.reply(`開始計時 ${time} 分鐘`)
-      return setTimeout(() => message.reply('時間到！'), millisecond)
-    }
-    return
-  }
-
-  // Martingale Strategy
   try {
-    let wager = 0
-    const discordUserId = message.author.id
-    const user = await readItems(discordUserId)
-    if (user.Item) {
-      wager = user.Item.Wager
+    // timer
+    if (message.channelId === process.env.TIMER_CHANNEL_ID) {
+      if (message.content === '!timer') {
+        return message.reply('計時請輸入 !timer [分鐘數]')
+      }
+      const order = message.content.split(' ')
+      if (order[0] === '!timer' && order.length === 2 &&
+        Number(order[1])) {
+        const time = Number(order[1])
+        const millisecond = time * 60000
+        message.reply(`開始計時 ${time} 分鐘`)
+        return setTimeout(() => message.reply('時間到！'), millisecond)
+      }
+      return
     }
 
-    if (message.content === '!win') {
-      if (wager === 0) return message.reply('還沒下注喔～')
-      const initialWager = user.Item.InitialWager
-      await deleteItems(discordUserId)
-      return message.reply(`恭喜獲利 ${initialWager}！`)
-    }
+    // Martingale Strategy
+    if (message.channelId === process.env.WAGER_CHANNEL_ID) {
+      let wager = 0
+      const discordUserId = message.author.id
+      const user = await readItems(discordUserId)
+      if (user.Item) {
+        wager = user.Item.Wager
+      }
 
-    if (message.content === '!draw') {
-      if (wager === 0) return message.reply('還沒下注喔～')
-      return message.reply(`再接再厲！籌碼：${wager}`)
-    }
+      if (message.content === '!win') {
+        if (wager === 0) return message.reply('還沒下注喔～')
+        const initialWager = user.Item.InitialWager
+        await deleteItems(discordUserId)
+        return message.reply(`恭喜獲利 ${initialWager}！`)
+      }
 
-    if (message.content === '!lose') {
-      if (wager === 0) return message.reply('還沒下注喔～')
-      wager = wager * 2
-      await updateItems(discordUserId, wager)
-      return message.reply(`籌碼加倍：${wager}`)
-    }
+      if (message.content === '!draw') {
+        if (wager === 0) return message.reply('還沒下注喔～')
+        return message.reply(`再接再厲！籌碼：${wager}`)
+      }
 
-    if (message.content === '!wager') {
-      if (wager === 0) return message.reply('還沒下注喔～')
-      return message.reply(`目前下注：${wager}`)
-    }
+      if (message.content === '!lose') {
+        if (wager === 0) return message.reply('還沒下注喔～')
+        wager = wager * 2
+        await updateItems(discordUserId, wager)
+        return message.reply(`籌碼加倍：${wager}`)
+      }
 
-    const order = message.content.split(' ')
+      if (message.content === '!wager') {
+        if (wager === 0) return message.reply('還沒下注喔～')
+        return message.reply(`目前下注：${wager}`)
+      }
 
-    if (order[0] === '!wager' && order.length === 2 &&
-      Number(order[1])) {
-      wager = Number(order[1])
-      await createItems(discordUserId, wager)
-      return message.reply(`下注 ${wager}`)
+      const order = message.content.split(' ')
+
+      if (order[0] === '!wager' && order.length === 2 &&
+        Number(order[1])) {
+        wager = Number(order[1])
+        await createItems(discordUserId, wager)
+        return message.reply(`下注 ${wager}`)
+      }
+      return
     }
   } catch (err) {
     console.warn(err)

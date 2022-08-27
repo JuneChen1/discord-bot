@@ -7,8 +7,7 @@ const guildId = process.env.SERVER_ID
 const token = process.env.BOT_TOKEN
 
 const commands = [
-  new SlashCommandBuilder().setName('hi').setDescription('打個招呼吧'),
-  new SlashCommandBuilder().setName('wager').setDescription('開始下注')
+  new SlashCommandBuilder().setName('hi').setDescription('打個招呼吧')
 ]
   .map(command => command.toJSON())
 
