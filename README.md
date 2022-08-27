@@ -1,6 +1,10 @@
 # Discord Bot
 使用 AWS DynamoDB 儲存資料的 Discord 機器人。 
 
+## 功能
++ 計時器
++ 籌碼下注紀錄
+
 ## 說明
 因為加入的一個 Discord 群組有擲骰子遊戲，想到之前聽過的 Martingale Strategy，就決定寫一個 bot 來設定下注的籌碼。
 
