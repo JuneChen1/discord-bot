@@ -50,3 +50,6 @@ Discord -> 使用者設定 -> 進階 -> 打開開發者模式
 + @discordjs/rest 1.0.1
 + dotenv 16.0.1
 + aws-sdk 2.1199.0
+
+## 部署
+[AWS EC2 筆記](https://medium.com/@juneee/%E7%AD%86%E8%A8%98-discord-bot-%E9%83%A8%E7%BD%B2%E8%87%B3-aws-ec2-f51eb238e2f5)
