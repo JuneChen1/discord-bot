@@ -1,5 +1,5 @@
 # Discord Bot
-使用 AWS DynamoDB 儲存資料的 Discord 機器人。 
+Discord 機器人，使用 AWS DynamoDB 並部署至 EC2。 
 
 ## 功能
 + 計時器
