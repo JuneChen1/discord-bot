@@ -51,6 +51,6 @@ Discord -> 使用者設定 -> 進階 -> 打開開發者模式
 + dotenv 16.0.1
 + aws-sdk 2.1199.0
 
-## 筆記
+## 相關部落格
 [AWS EC2 部署](https://medium.com/@juneee/%E7%AD%86%E8%A8%98-discord-bot-%E9%83%A8%E7%BD%B2%E8%87%B3-aws-ec2-f51eb238e2f5)  
 [AWS DynamoDB](https://medium.com/@juneee/node-js-%E6%93%8D%E4%BD%9C-aws-dynamodb-2a74de8deb4d)
