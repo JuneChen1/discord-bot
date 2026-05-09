@@ -14,8 +14,36 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+// ── 日期／時間格式化 ──────────────────────────────────────
+
+// /remind、/remind-import
+// "HH:MM" → 分鐘數（用於時間大小比較，避免字串比較的前導零問題）
+function toMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// /remind、/remind-delete、/remind-import
+// YYYYMMDD → YYYY/MM/DD
+function formatEventDate(dateStr) {
+  return `${dateStr.slice(0, 4)}/${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
+}
+
+// /remind、/reminders
+// UTC timestamp → YYYY/MM/DD HH:MM（台灣時間 UTC+8）
+function formatTaipeiTime(ts) {
+  const d = new Date(ts + 8 * 60 * 60 * 1000);
+  const YYYY = d.getUTCFullYear();
+  const MM = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const DD = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${YYYY}/${MM}/${DD} ${hh}:${mm}`;
+}
+
 // ── CSV 解析 ──────────────────────────────────────────────
 
+// /remind-import
 // 支援帶引號的欄位（欄位內含逗號時用雙引號包圍）
 function parseCSVLine(line) {
   const fields = [];
@@ -41,13 +69,19 @@ function parseCSVLine(line) {
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const REMINDERS_FILE = path.join(DATA_DIR, 'reminders.json');
 
+// 啟動時、/remind、/reminders、/remind-delete、/remind-import
 function loadReminders() {
   if (fs.existsSync(REMINDERS_FILE)) {
-    return JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8'));
+    try {
+      return JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8'));
+    } catch {
+      return [];
+    }
   }
   return [];
 }
 
+// /remind、/remind-delete、/remind-import、提醒觸發後（fireReminder）
 function saveReminders(reminders) {
   fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf8');
 }
@@ -55,6 +89,7 @@ function saveReminders(reminders) {
 const DEFAULT_REMIND_HOUR = 22;
 const DEFAULT_REMIND_MINUTE = 0;
 
+// /remind、/remind-import
 // 解析 "HH:MM" 字串，回傳 { hour, minute } 或 null（格式錯誤）
 function parseRemindTime(timeStr) {
   if (!timeStr) return { hour: DEFAULT_REMIND_HOUR, minute: DEFAULT_REMIND_MINUTE };
@@ -66,6 +101,7 @@ function parseRemindTime(timeStr) {
   return { hour, minute };
 }
 
+// /remind、/remind-import
 // 給定事件日期與提醒時間，回傳指定提醒日期（預設前一天）指定時間（台灣時間 UTC+8）的 UTC timestamp (ms)
 function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remindMinute = DEFAULT_REMIND_MINUTE, remindDateStr = null) {
   if (!/^\d{8}$/.test(eventDateStr)) return null;
@@ -91,30 +127,13 @@ function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remind
   return remindDay.getTime();
 }
 
-// ── 日期／時間格式化 ──────────────────────────────────────
-
-// YYYYMMDD → YYYY/MM/DD
-function formatEventDate(dateStr) {
-  return `${dateStr.slice(0, 4)}/${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
-}
-
-// UTC timestamp → YYYY/MM/DD HH:MM（台灣時間 UTC+8）
-function formatTaipeiTime(ts) {
-  const d = new Date(ts + 8 * 60 * 60 * 1000);
-  const YYYY = d.getUTCFullYear();
-  const MM = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const DD = String(d.getUTCDate()).padStart(2, '0');
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${YYYY}/${MM}/${DD} ${hh}:${mm}`;
-}
-
 // setTimeout 最大值約 24.8 天，超過需分段遞迴
 const MAX_TIMEOUT_MS = 2147483647;
 
 // reminder.id -> timer handle，用於取消
 const activeTimers = new Map();
 
+// 排程觸發（內部呼叫，非使用者指令）
 async function fireReminder(reminder) {
   activeTimers.delete(reminder.id);
   const channel = client.channels.cache.get(reminder.channelId);
@@ -130,6 +149,7 @@ async function fireReminder(reminder) {
   saveReminders(loadReminders().filter(r => r.id !== reminder.id));
 }
 
+// 啟動時、/remind、/remind-import
 function scheduleReminder(reminder) {
   const delay = reminder.remindAt - Date.now();
   if (delay <= 0) return;
@@ -144,6 +164,7 @@ function scheduleReminder(reminder) {
   activeTimers.set(reminder.id, handle);
 }
 
+// /remind-delete
 function cancelReminder(reminderId) {
   const handle = activeTimers.get(reminderId);
   if (handle !== undefined) {
@@ -182,7 +203,7 @@ const commandDefs = [
 
   new SlashCommandBuilder()
     .setName('remind-delete')
-    .setDescription('刪除一個待發送的提醒')
+    .setDescription('刪除待發送的提醒，支援多個 ID（空白隔開）')
     .addStringOption((opt) =>
       opt.setName('id').setDescription('提醒 ID，多個用空白隔開（ID 可從建立時的訊息底部或 /reminders 查詢）').setRequired(true)
     )
@@ -277,7 +298,7 @@ client.on('interactionCreate', async (interaction) => {
 
     const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
 
-    if (remindDateStr && remindDateStr === dateStr && timeStr && remindTimeDisplay >= timeStr) {
+    if (remindDateStr && remindDateStr === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
       await interaction.reply({
         content: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！`,
         flags: MessageFlags.Ephemeral,
@@ -296,7 +317,7 @@ client.on('interactionCreate', async (interaction) => {
 
     const reminders = loadReminders();
 
-    const duplicate = reminders.find(r => r.userId === userId && r.eventDate === dateStr && r.eventTime === timeStr && r.message === message);
+    const duplicate = reminders.find(r => r.userId === userId && r.eventDate === dateStr && r.eventTime === timeStr && r.message === message && r.remindTime === remindTimeDisplay && (r.remindDate ?? '') === remindDateStr);
     if (duplicate) {
       await interaction.reply({
         content: `❌ 你在 \`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同內容的提醒：「${message}」`,
@@ -399,7 +420,7 @@ client.on('interactionCreate', async (interaction) => {
 
     saveReminders(reminders);
 
-    const color = failed.length === 0 ? 0xed4245 : deleted.length === 0 ? 0xfee75c : 0xfee75c;
+    const color = failed.length === 0 ? 0x57f287 : deleted.length === 0 ? 0xed4245 : 0xfee75c;
     const embed = new EmbedBuilder()
       .setTitle('🗑️ 刪除結果')
       .setColor(color);
@@ -495,7 +516,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
 
-      if (remindDateRaw && remindDateRaw === dateStr && timeStr && remindTimeDisplay >= timeStr) {
+      if (remindDateRaw && remindDateRaw === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
         failed.push(`第 ${i + 1} 行：提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）`);
         continue;
       }
@@ -511,7 +532,7 @@ client.on('interactionCreate', async (interaction) => {
         continue;
       }
 
-      const isDuplicate = reminders.some(r => r.userId === userId && r.eventDate === dateStr && r.eventTime === timeStr && r.message === message);
+      const isDuplicate = reminders.some(r => r.userId === userId && r.eventDate === dateStr && r.eventTime === timeStr && r.message === message && r.remindTime === remindTimeDisplay && (r.remindDate ?? '') === remindDateRaw);
       if (isDuplicate) {
         failed.push(`第 ${i + 1} 行：\`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同提醒「${message}」`);
         continue;
@@ -575,7 +596,7 @@ client.on('interactionCreate', async (interaction) => {
         },
         {
           name: '/remind-delete',
-          value: '刪除一個待發送的提醒\n`id` 提醒 ID\n​',
+          value: '刪除待發送的提醒\n`id` 提醒 ID，多個用空白隔開\n​',
         },
         {
           name: '/remind-import',
