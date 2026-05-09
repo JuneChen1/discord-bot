@@ -263,7 +263,7 @@ client.on('interactionCreate', async (interaction) => {
       const eventTimeDisplay = r.eventTime ? `　🕐 ${r.eventTime}` : '';
       embed.addFields({
         name: `📅 事件：${eventDate}${eventTimeDisplay}　⏰ 提醒：${remindTime}`,
-        value: `💬 ${r.message}\n📍 <#${r.channelId}>\n🆔 \`${r.id}\``,
+        value: `💬 ${r.message}\n📍 <#${r.channelId}>\n🆔 \`${r.id}\`\n​`,
       });
     }
 

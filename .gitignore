@@ -1,6 +1,7 @@
 node_modules/
 .env
 .env.*
+!.env.example
 reminders.json
 reminders_export.csv
 *.log
