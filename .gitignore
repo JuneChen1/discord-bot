@@ -2,5 +2,6 @@ node_modules/
 .env
 .env.*
 reminders.json
+reminders_export.csv
 *.log
 Thumbs.db

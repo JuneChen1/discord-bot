@@ -14,6 +14,28 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+// ── CSV 解析 ──────────────────────────────────────────────
+
+// 支援帶引號的欄位（欄位內含逗號時用雙引號包圍）
+function parseCSVLine(line) {
+  const fields = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current);
+  return fields;
+}
+
 // ── 提醒功能 ──────────────────────────────────────────────
 
 const DATA_DIR = process.env.DATA_DIR || __dirname;
@@ -119,16 +141,24 @@ const commandDefs = [
     .toJSON(),
 
   new SlashCommandBuilder()
+    .setName('remind-import')
+    .setDescription('從 CSV 檔案批次匯入提醒')
+    .addAttachmentOption((opt) =>
+      opt.setName('file').setDescription('CSV 檔案（欄位：date, message, time）').setRequired(true)
+    )
+    .toJSON(),
+
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('查看所有可用指令')
     .toJSON(),
 ];
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(Routes.applicationCommands(client.user.id), { body: commandDefs });
   console.log(`Bot 已上線：${client.user.tag}`);
-  console.log('已註冊指令：remind, reminders, remind-delete');
+  console.log('已註冊指令：remind, reminders, remind-delete, remind-import');
 
   // 載入並排程所有已存在的提醒，過期的直接刪除
   const reminders = loadReminders();
@@ -276,6 +306,117 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  // ── /remind-import ───────────────────────────────────────
+  if (cmd === 'remind-import') {
+    const attachment = interaction.options.getAttachment('file');
+
+    if (!attachment.name.endsWith('.csv')) {
+      await interaction.reply({
+        content: '❌ 請上傳 `.csv` 格式的檔案。',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    let text;
+    try {
+      const res = await fetch(attachment.url);
+      text = await res.text();
+    } catch {
+      await interaction.editReply('❌ 無法讀取檔案，請稍後再試。');
+      return;
+    }
+
+    // 去掉 UTF-8 BOM（Excel 存出的 CSV 會帶這個）
+    text = text.replace(/^﻿/, '');
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+    if (lines.length === 0) {
+      await interaction.editReply('❌ CSV 檔案是空的。');
+      return;
+    }
+
+    // 若第一行是 header 則跳過
+    const dataLines = lines[0].toLowerCase().startsWith('date') ? lines.slice(1) : lines;
+    if (dataLines.length === 0) {
+      await interaction.editReply('❌ CSV 只有 header，沒有資料列。');
+      return;
+    }
+
+    const targetChannel =
+      (process.env.REMINDER_CHANNEL_ID
+        ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
+        : null) ??
+      interaction.channel;
+
+    const success = [];
+    const failed = [];
+    const reminders = loadReminders();
+    const now = Date.now();
+
+    for (let i = 0; i < dataLines.length; i++) {
+      const fields = parseCSVLine(dataLines[i]);
+      const dateStr = (fields[0] ?? '').trim();
+      const message = (fields[1] ?? '').trim();
+      const timeStr = (fields[2] ?? '').trim();
+
+      if (!dateStr || !message) {
+        failed.push(`第 ${i + 1} 行：缺少必要欄位（date 或 message）`);
+        continue;
+      }
+
+      const remindAt = calcReminderTime(dateStr);
+      if (!remindAt) {
+        failed.push(`第 ${i + 1} 行：日期格式錯誤（\`${dateStr}\`）`);
+        continue;
+      }
+
+      if (remindAt <= now) {
+        failed.push(`第 ${i + 1} 行：前一天 22:00 已過，無法設定（\`${dateStr}\`）`);
+        continue;
+      }
+
+      const id = `${userId}-${Date.now()}-${i}`;
+      const reminder = {
+        id,
+        userId,
+        userName: interaction.user.username,
+        channelId: targetChannel.id,
+        message,
+        eventDate: dateStr,
+        eventTime: timeStr,
+        remindAt,
+      };
+
+      reminders.push(reminder);
+      scheduleReminder(reminder);
+      const eventDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
+      success.push(`\`${eventDisplay}\`　${message}`);
+    }
+
+    saveReminders(reminders);
+
+    const color =
+      failed.length === 0 ? 0x57f287 :
+      success.length === 0 ? 0xed4245 :
+      0xfee75c;
+
+    const embed = new EmbedBuilder()
+      .setTitle('📥 批次匯入結果')
+      .setColor(color);
+
+    if (success.length > 0) {
+      embed.addFields({ name: `✅ 成功 ${success.length} 筆`, value: success.join('\n') });
+    }
+    if (failed.length > 0) {
+      embed.addFields({ name: `❌ 失敗 ${failed.length} 筆`, value: failed.join('\n') });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
   // ── /help ─────────────────────────────────────────────────
   if (cmd === 'help') {
     const embed = new EmbedBuilder()
@@ -293,6 +434,10 @@ client.on('interactionCreate', async (interaction) => {
         {
           name: '/remind-delete',
           value: '刪除一個待發送的提醒\n`id` 提醒 ID\n​',
+        },
+        {
+          name: '/remind-import',
+          value: '從 CSV 檔案批次匯入提醒\n`file` CSV 附件（欄位：date, message, time）\n​',
         },
         {
           name: '/help',
