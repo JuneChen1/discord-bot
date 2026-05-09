@@ -12,57 +12,19 @@ const path = require('path');
 
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+const {
+  DEFAULT_REMIND_HOUR,
+  DEFAULT_REMIND_MINUTE,
+  toMinutes,
+  formatEventDate,
+  formatTaipeiTime,
+  parseCSVLine,
+  parseRemindTime,
+  calcReminderTime,
+  isDuplicateReminder,
+} = require('./utils');
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
-// ── 日期／時間格式化 ──────────────────────────────────────
-
-// /remind、/remind-import
-// "HH:MM" → 分鐘數（用於時間大小比較，避免字串比較的前導零問題）
-function toMinutes(hhmm) {
-  const [h, m] = hhmm.split(':').map(Number);
-  return h * 60 + m;
-}
-
-// /remind、/remind-delete、/remind-import
-// YYYYMMDD → YYYY/MM/DD
-function formatEventDate(dateStr) {
-  return `${dateStr.slice(0, 4)}/${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
-}
-
-// /remind、/reminders
-// UTC timestamp → YYYY/MM/DD HH:MM（台灣時間 UTC+8）
-function formatTaipeiTime(ts) {
-  const d = new Date(ts + 8 * 60 * 60 * 1000);
-  const YYYY = d.getUTCFullYear();
-  const MM = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const DD = String(d.getUTCDate()).padStart(2, '0');
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${YYYY}/${MM}/${DD} ${hh}:${mm}`;
-}
-
-// ── CSV 解析 ──────────────────────────────────────────────
-
-// /remind-import
-// 支援帶引號的欄位（欄位內含逗號時用雙引號包圍）
-function parseCSVLine(line) {
-  const fields = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      inQuotes = !inQuotes;
-    } else if (ch === ',' && !inQuotes) {
-      fields.push(current);
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  fields.push(current);
-  return fields;
-}
 
 // ── 提醒功能 ──────────────────────────────────────────────
 
@@ -84,47 +46,6 @@ function loadReminders() {
 // /remind、/remind-delete、/remind-import、提醒觸發後（fireReminder）
 function saveReminders(reminders) {
   fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf8');
-}
-
-const DEFAULT_REMIND_HOUR = 22;
-const DEFAULT_REMIND_MINUTE = 0;
-
-// /remind、/remind-import
-// 解析 "HH:MM" 字串，回傳 { hour, minute } 或 null（格式錯誤）
-function parseRemindTime(timeStr) {
-  if (!timeStr) return { hour: DEFAULT_REMIND_HOUR, minute: DEFAULT_REMIND_MINUTE };
-  const m = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-  const hour = Number(m[1]);
-  const minute = Number(m[2]);
-  if (hour > 23 || minute > 59) return null;
-  return { hour, minute };
-}
-
-// /remind、/remind-import
-// 給定事件日期與提醒時間，回傳指定提醒日期（預設前一天）指定時間（台灣時間 UTC+8）的 UTC timestamp (ms)
-function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remindMinute = DEFAULT_REMIND_MINUTE, remindDateStr = null) {
-  if (!/^\d{8}$/.test(eventDateStr)) return null;
-  let remindDay;
-  if (remindDateStr) {
-    if (!/^\d{8}$/.test(remindDateStr)) return null;
-    const ry = Number(remindDateStr.slice(0, 4));
-    const rm = Number(remindDateStr.slice(4, 6));
-    const rd = Number(remindDateStr.slice(6, 8));
-    remindDay = new Date(Date.UTC(ry, rm - 1, rd));
-    if (isNaN(remindDay)) return null;
-  } else {
-    const y = Number(eventDateStr.slice(0, 4));
-    const m = Number(eventDateStr.slice(4, 6));
-    const d = Number(eventDateStr.slice(6, 8));
-    const eventDate = new Date(Date.UTC(y, m - 1, d));
-    if (isNaN(eventDate)) return null;
-    remindDay = new Date(eventDate);
-    remindDay.setUTCDate(remindDay.getUTCDate() - 1);
-  }
-  // remindHour:remindMinute 台灣時間 UTC+8 → UTC
-  remindDay.setUTCHours(remindHour - 8, remindMinute, 0, 0);
-  return remindDay.getTime();
 }
 
 // setTimeout 最大值約 24.8 天，超過需分段遞迴
@@ -317,7 +238,7 @@ client.on('interactionCreate', async (interaction) => {
 
     const reminders = loadReminders();
 
-    const duplicate = reminders.find(r => r.userId === userId && r.eventDate === dateStr && r.eventTime === timeStr && r.message === message && r.remindTime === remindTimeDisplay && (r.remindDate ?? '') === remindDateStr);
+    const duplicate = isDuplicateReminder(reminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateStr });
     if (duplicate) {
       await interaction.reply({
         content: `❌ 你在 \`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同內容的提醒：「${message}」`,
@@ -487,6 +408,10 @@ client.on('interactionCreate', async (interaction) => {
 
     for (let i = 0; i < dataLines.length; i++) {
       const fields = parseCSVLine(dataLines[i]);
+      if (fields === null) {
+        failed.push(`第 ${i + 1} 行：CSV 格式錯誤（引號未關閉）`);
+        continue;
+      }
       const dateStr = (fields[0] ?? '').trim();
       const message = (fields[1] ?? '').trim();
       const timeStr = (fields[2] ?? '').trim();
@@ -532,7 +457,7 @@ client.on('interactionCreate', async (interaction) => {
         continue;
       }
 
-      const isDuplicate = reminders.some(r => r.userId === userId && r.eventDate === dateStr && r.eventTime === timeStr && r.message === message && r.remindTime === remindTimeDisplay && (r.remindDate ?? '') === remindDateRaw);
+      const isDuplicate = isDuplicateReminder(reminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateRaw });
       if (isDuplicate) {
         failed.push(`第 ${i + 1} 行：\`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同提醒「${message}」`);
         continue;

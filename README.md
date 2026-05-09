@@ -42,7 +42,7 @@
 
 CSV 格式請查看 [reminders_template.csv](reminders_template.csv)。
 
-同一日期若已有相同內容的提醒，該列將跳過並在結果中標示失敗。
+同一日期時間若已有相同內容的提醒，該列將跳過並在結果中標示失敗。
 
 ---
 
@@ -54,8 +54,33 @@ CSV 格式請查看 [reminders_template.csv](reminders_template.csv)。
 
 ## 本地端運作說明
 
+### 啟動步驟
+
+1. 複製 `.env.example` 為 `.env`，填入必要的環境變數：
+
+   ```
+   DISCORD_TOKEN=你的 Bot Token
+   REMINDER_CHANNEL_ID=（選填）提醒發送頻道 ID
+   DATA_DIR=（選填）資料儲存路徑
+   ```
+
+2. 安裝相依套件：
+
+   ```bash
+   npm install
+   ```
+
+3. 啟動 Bot：
+
+   ```bash
+   npm start
+   ```
+
+---
+
 Bot 啟動時會自動讀取 `reminders.json`，將其中所有尚未到期的提醒重新排程。
 
 - **已過期**的提醒（提醒時間早於啟動時間）會在啟動時自動刪除。
 - **提醒資料儲存位置**：預設為專案根目錄的 `reminders.json`，可透過環境變數 `DATA_DIR` 指定其他路徑。
+- **提醒發送頻道**：預設為執行指令的頻道，可透過環境變數 `REMINDER_CHANNEL_ID` 指定固定頻道，設定後所有提醒一律發送至該頻道。
 - 若需手動新增提醒，可直接編輯 `reminders.json`，格式與 `/remind-import` CSV 欄位對應，重啟 Bot 後即會生效。
