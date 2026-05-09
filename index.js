@@ -136,7 +136,7 @@ const commandDefs = [
     .setName('remind-delete')
     .setDescription('刪除一個待發送的提醒')
     .addStringOption((opt) =>
-      opt.setName('id').setDescription('提醒 ID（設定時訊息底部可查到）').setRequired(true)
+      opt.setName('id').setDescription('提醒 ID，多個用空白隔開（ID 可從建立時的訊息底部或 /reminders 查詢）').setRequired(true)
     )
     .toJSON(),
 
@@ -283,34 +283,42 @@ client.on('interactionCreate', async (interaction) => {
 
   // ── /remind-delete ────────────────────────────────────────
   if (cmd === 'remind-delete') {
-    const targetId = interaction.options.getString('id');
+    const ids = interaction.options.getString('id').trim().split(/\s+/);
     const reminders = loadReminders();
-    const target = reminders.find(r => r.id === targetId);
+    const deleted = [];
+    const failed = [];
 
-    if (!target) {
-      await interaction.reply({ content: '❌ 找不到該 ID 的提醒，請確認 ID 是否正確。', flags: MessageFlags.Ephemeral });
-      return;
+    for (const targetId of ids) {
+      const target = reminders.find(r => r.id === targetId);
+      if (!target) {
+        failed.push(`\`${targetId}\`：找不到此 ID`);
+        continue;
+      }
+      if (target.userId !== userId) {
+        failed.push(`\`${targetId}\`：你只能刪除自己的提醒`);
+        continue;
+      }
+      cancelReminder(targetId);
+      const dateDisplay = target.eventTime
+        ? `${target.eventDate ?? '未知'}　🕐 ${target.eventTime}`
+        : (target.eventDate ?? '未知');
+      deleted.push(`📅 ${dateDisplay}　💬 ${target.message}`);
+      reminders.splice(reminders.indexOf(target), 1);
     }
 
-    if (target.userId !== userId) {
-      await interaction.reply({ content: '❌ 你只能刪除自己設定的提醒。', flags: MessageFlags.Ephemeral });
-      return;
-    }
+    saveReminders(reminders);
 
-    cancelReminder(targetId);
-    saveReminders(reminders.filter(r => r.id !== targetId));
-
-    const deletedDateDisplay = target.eventTime
-      ? `${target.eventDate ?? '未知'}　🕐 ${target.eventTime}`
-      : (target.eventDate ?? '未知');
+    const color = failed.length === 0 ? 0xed4245 : deleted.length === 0 ? 0xfee75c : 0xfee75c;
     const embed = new EmbedBuilder()
-      .setTitle('🗑️ 提醒已刪除')
-      .addFields(
-        { name: '📅 事件日期', value: deletedDateDisplay, inline: true },
-        { name: '💬 內容', value: target.message },
-      )
-      .setColor(0xed4245)
-      .setFooter({ text: `ID: ${targetId}` });
+      .setTitle('🗑️ 刪除結果')
+      .setColor(color);
+
+    if (deleted.length > 0) {
+      embed.addFields({ name: `✅ 已刪除 ${deleted.length} 筆`, value: deleted.join('\n') });
+    }
+    if (failed.length > 0) {
+      embed.addFields({ name: `❌ 失敗 ${failed.length} 筆`, value: failed.join('\n') });
+    }
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
