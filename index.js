@@ -208,6 +208,17 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    const reminders = loadReminders();
+
+    const duplicate = reminders.find(r => r.userId === userId && r.eventDate === dateStr && r.message === message);
+    if (duplicate) {
+      await interaction.reply({
+        content: `❌ 你在 \`${dateStr}\` 已有相同內容的提醒：「${message}」`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const id = `${userId}-${Date.now()}`;
     const reminder = {
       id,
@@ -220,7 +231,6 @@ client.on('interactionCreate', async (interaction) => {
       remindAt,
     };
 
-    const reminders = loadReminders();
     reminders.push(reminder);
     saveReminders(reminders);
     scheduleReminder(reminder);
@@ -374,6 +384,12 @@ client.on('interactionCreate', async (interaction) => {
 
       if (remindAt <= now) {
         failed.push(`第 ${i + 1} 行：前一天 22:00 已過，無法設定（\`${dateStr}\`）`);
+        continue;
+      }
+
+      const isDuplicate = reminders.some(r => r.userId === userId && r.eventDate === dateStr && r.message === message);
+      if (isDuplicate) {
+        failed.push(`第 ${i + 1} 行：\`${dateStr}\` 已有相同提醒「${message}」`);
         continue;
       }
 

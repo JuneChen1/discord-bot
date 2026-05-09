@@ -10,6 +10,8 @@
 | message | 是 | 提醒內容 |
 | time | 否 | 事件時間，格式 `HH:MM`，例如 `14:30` |
 
+同一日期若已有相同內容的提醒，將不會重複建立。
+
 ---
 
 ### `/reminders`
@@ -37,6 +39,8 @@
 | file | 是 | CSV 附件，欄位依序為 `date`、`message`、`time` |
 
 CSV 格式請查看 [reminders_template.csv](reminders_template.csv)。
+
+同一日期若已有相同內容的提醒，該列將跳過並在結果中標示失敗。
 
 ---
 
