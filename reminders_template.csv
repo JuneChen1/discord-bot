@@ -1,4 +1,4 @@
-﻿date,message,time
-20260510,Team meeting,14:30
-20260515,Project deadline,
-20260520,Demo day,09:00
+date,message,time,remind_time,remind_date
+20260510,Team meeting,14:30,,
+20260515,Project deadline,,,
+20260520,Demo day,09:00,08:00,20260519

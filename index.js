@@ -66,19 +66,29 @@ function parseRemindTime(timeStr) {
   return { hour, minute };
 }
 
-// 給定事件日期與提醒時間，回傳前一天指定時間（台灣時間 UTC+8）的 UTC timestamp (ms)
-function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remindMinute = DEFAULT_REMIND_MINUTE) {
+// 給定事件日期與提醒時間，回傳指定提醒日期（預設前一天）指定時間（台灣時間 UTC+8）的 UTC timestamp (ms)
+function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remindMinute = DEFAULT_REMIND_MINUTE, remindDateStr = null) {
   if (!/^\d{8}$/.test(eventDateStr)) return null;
-  const y = Number(eventDateStr.slice(0, 4));
-  const m = Number(eventDateStr.slice(4, 6));
-  const d = Number(eventDateStr.slice(6, 8));
-  const eventDate = new Date(Date.UTC(y, m - 1, d));
-  if (isNaN(eventDate)) return null;
-  // 前一天 remindHour:remindMinute UTC+8 = 前一天 (remindHour-8):remindMinute UTC
-  const prevDay = new Date(eventDate);
-  prevDay.setUTCDate(prevDay.getUTCDate() - 1);
-  prevDay.setUTCHours(remindHour - 8, remindMinute, 0, 0);
-  return prevDay.getTime();
+  let remindDay;
+  if (remindDateStr) {
+    if (!/^\d{8}$/.test(remindDateStr)) return null;
+    const ry = Number(remindDateStr.slice(0, 4));
+    const rm = Number(remindDateStr.slice(4, 6));
+    const rd = Number(remindDateStr.slice(6, 8));
+    remindDay = new Date(Date.UTC(ry, rm - 1, rd));
+    if (isNaN(remindDay)) return null;
+  } else {
+    const y = Number(eventDateStr.slice(0, 4));
+    const m = Number(eventDateStr.slice(4, 6));
+    const d = Number(eventDateStr.slice(6, 8));
+    const eventDate = new Date(Date.UTC(y, m - 1, d));
+    if (isNaN(eventDate)) return null;
+    remindDay = new Date(eventDate);
+    remindDay.setUTCDate(remindDay.getUTCDate() - 1);
+  }
+  // remindHour:remindMinute 台灣時間 UTC+8 → UTC
+  remindDay.setUTCHours(remindHour - 8, remindMinute, 0, 0);
+  return remindDay.getTime();
 }
 
 // ── 日期／時間格式化 ──────────────────────────────────────
@@ -147,7 +157,7 @@ function cancelReminder(reminderId) {
 const commandDefs = [
   new SlashCommandBuilder()
     .setName('remind')
-    .setDescription('設定提醒，將在事件前一天指定時間（預設 22:00 台灣時間）發送')
+    .setDescription('設定提醒，將在指定日期（預設事件前一天）的指定時間（預設 22:00 台灣時間）發送')
     .addStringOption((opt) =>
       opt.setName('date').setDescription('事件日期，格式 YYYYMMDD，例如 20260510').setRequired(true)
     )
@@ -155,10 +165,13 @@ const commandDefs = [
       opt.setName('message').setDescription('提醒內容').setRequired(true)
     )
     .addStringOption((opt) =>
-      opt.setName('time').setDescription('事件時間，格式 HH:MM，例如 14:30（選填）').setRequired(false)
+      opt.setName('time').setDescription('事件時間，格式 HH:MM，例如 14:30').setRequired(false)
     )
     .addStringOption((opt) =>
-      opt.setName('remind_time').setDescription('提醒時間，格式 HH:MM，預設 22:00（台灣時間，前一天發送）').setRequired(false)
+      opt.setName('remind_date').setDescription('提醒日期，格式 YYYYMMDD，預設為事件前一天').setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt.setName('remind_time').setDescription('提醒時間，格式 HH:MM，預設 22:00（台灣時間）').setRequired(false)
     )
     .toJSON(),
 
@@ -179,7 +192,7 @@ const commandDefs = [
     .setName('remind-import')
     .setDescription('從 CSV 檔案批次匯入提醒')
     .addAttachmentOption((opt) =>
-      opt.setName('file').setDescription('CSV 檔案（欄位：date, message, time）').setRequired(true)
+      opt.setName('file').setDescription('CSV 檔案（欄位：date, message, time, remind_time, remind_date）').setRequired(true)
     )
     .toJSON(),
 
@@ -220,6 +233,7 @@ client.on('interactionCreate', async (interaction) => {
     const message = interaction.options.getString('message');
     const timeStr = interaction.options.getString('time') ?? '';
     const remindTimeStr = interaction.options.getString('remind_time') ?? '';
+    const remindDateStr = interaction.options.getString('remind_date') ?? '';
     const targetChannel =
       (process.env.REMINDER_CHANNEL_ID
         ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
@@ -235,7 +249,23 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute);
+    if (remindDateStr && !/^\d{8}$/.test(remindDateStr)) {
+      await interaction.reply({
+        content: '❌ 提醒日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260509`。',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (remindDateStr && remindDateStr > dateStr) {
+      await interaction.reply({
+        content: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateStr || null);
 
     if (!remindAt) {
       await interaction.reply({
@@ -246,6 +276,14 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
+
+    if (remindDateStr && remindDateStr === dateStr && timeStr && remindTimeDisplay >= timeStr) {
+      await interaction.reply({
+        content: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     if (remindAt <= Date.now()) {
       const remindAtDisplay = formatTaipeiTime(remindAt);
@@ -277,6 +315,7 @@ client.on('interactionCreate', async (interaction) => {
       eventDate: dateStr,
       eventTime: timeStr,
       remindTime: remindTimeDisplay,
+      ...(remindDateStr ? { remindDate: remindDateStr } : {}),
       remindAt,
     };
 
@@ -431,6 +470,7 @@ client.on('interactionCreate', async (interaction) => {
       const message = (fields[1] ?? '').trim();
       const timeStr = (fields[2] ?? '').trim();
       const remindTimeRaw = (fields[3] ?? '').trim();
+      const remindDateRaw = (fields[4] ?? '').trim();
 
       if (!dateStr || !message) {
         failed.push(`第 ${i + 1} 行：缺少必要欄位（date 或 message）`);
@@ -443,15 +483,31 @@ client.on('interactionCreate', async (interaction) => {
         continue;
       }
 
+      if (remindDateRaw && !/^\d{8}$/.test(remindDateRaw)) {
+        failed.push(`第 ${i + 1} 行：remind_date 格式錯誤（\`${remindDateRaw}\`），請使用 YYYYMMDD`);
+        continue;
+      }
+
+      if (remindDateRaw && remindDateRaw > dateStr) {
+        failed.push(`第 ${i + 1} 行：提醒日期（\`${formatEventDate(remindDateRaw)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）`);
+        continue;
+      }
+
       const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
-      const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute);
+
+      if (remindDateRaw && remindDateRaw === dateStr && timeStr && remindTimeDisplay >= timeStr) {
+        failed.push(`第 ${i + 1} 行：提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）`);
+        continue;
+      }
+
+      const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateRaw || null);
       if (!remindAt) {
         failed.push(`第 ${i + 1} 行：日期格式錯誤（\`${dateStr}\`）`);
         continue;
       }
 
       if (remindAt <= now) {
-        failed.push(`第 ${i + 1} 行：提醒時間 ${remindTimeDisplay} 已過，無法設定（\`${formatEventDate(dateStr)}\`）`);
+        failed.push(`第 ${i + 1} 行：提醒時間已過，無法設定（\`${formatEventDate(dateStr)}\`）`);
         continue;
       }
 
@@ -471,6 +527,7 @@ client.on('interactionCreate', async (interaction) => {
         eventDate: dateStr,
         eventTime: timeStr,
         remindTime: remindTimeDisplay,
+        ...(remindDateRaw ? { remindDate: remindDateRaw } : {}),
         remindAt,
       };
 
@@ -510,7 +567,7 @@ client.on('interactionCreate', async (interaction) => {
       .addFields(
         {
           name: '/remind',
-          value: '設定提醒，將在事件前一天指定時間發送（預設 22:00 台灣時間）\n`date` 事件日期（YYYYMMDD）　`message` 提醒內容　`time` 事件時間（HH:MM，選填）　`remind_time` 提醒時間（HH:MM，預設 22:00）\n​',
+          value: '設定提醒，將在指定日期（預設事件前一天）的指定時間發送（預設 22:00 台灣時間）\n`date` 事件日期（YYYYMMDD）　`message` 提醒內容　`time` 事件時間（HH:MM，選填）　`remind_time` 提醒時間（HH:MM，預設 22:00）　`remind_date` 提醒日期（YYYYMMDD，預設前一天）\n​',
         },
         {
           name: '/reminders',
@@ -522,7 +579,7 @@ client.on('interactionCreate', async (interaction) => {
         },
         {
           name: '/remind-import',
-          value: '從 CSV 檔案批次匯入提醒\n`file` CSV 附件（欄位：date, message, time）\n​',
+          value: '從 CSV 檔案批次匯入提醒\n`file` CSV 附件（欄位：date, message, time, remind_time, remind_date）\n​',
         },
         {
           name: '/help',

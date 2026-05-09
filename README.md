@@ -2,7 +2,7 @@
 
 ### `/remind`
 
-設定提醒，將在事件前一天的指定時間自動發送到指定頻道（預設為 22:00 台灣時間）。
+設定提醒，將在指定日期（預設事件前一天）的指定時間（預設為 22:00 台灣時間）自動發送到指定頻道。
 
 | 參數 | 必填 | 說明 |
 |------|------|------|
@@ -10,6 +10,7 @@
 | message | 是 | 提醒內容 |
 | time | 否 | 事件時間，格式 `HH:MM`，例如 `14:30` |
 | remind_time | 否 | 提醒發送時間，格式 `HH:MM`，預設 `22:00` |
+| remind_date | 否 | 提醒發送日期，格式 `YYYYMMDD`，預設為事件前一天 |
 
 同一日期時間若已有相同內容的提醒，將不會重複建立。
 
@@ -37,7 +38,7 @@
 
 | 參數 | 必填 | 說明 |
 |------|------|------|
-| file | 是 | CSV 附件，欄位依序為 `date`、`message`、`time`、`remind_time`（後兩欄選填） |
+| file | 是 | CSV 附件，欄位依序為 `date`、`message`、`time`、`remind_time`、`remind_date`（後三欄選填） |
 
 CSV 格式請查看 [reminders_template.csv](reminders_template.csv)。
 
@@ -48,3 +49,13 @@ CSV 格式請查看 [reminders_template.csv](reminders_template.csv)。
 ### `/help`
 
 列出所有可用指令與簡短說明。
+
+---
+
+## 本地端運作說明
+
+Bot 啟動時會自動讀取 `reminders.json`，將其中所有尚未到期的提醒重新排程。
+
+- **已過期**的提醒（提醒時間早於啟動時間）會在啟動時自動刪除。
+- **提醒資料儲存位置**：預設為專案根目錄的 `reminders.json`，可透過環境變數 `DATA_DIR` 指定其他路徑。
+- 若需手動新增提醒，可直接編輯 `reminders.json`，格式與 `/remind-import` CSV 欄位對應，重啟 Bot 後即會生效。
