@@ -16,7 +16,8 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 // ── 提醒功能 ──────────────────────────────────────────────
 
-const REMINDERS_FILE = path.join(__dirname, 'reminders.json');
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const REMINDERS_FILE = path.join(DATA_DIR, 'reminders.json');
 
 function loadReminders() {
   if (fs.existsSync(REMINDERS_FILE)) {
