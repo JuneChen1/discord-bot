@@ -113,7 +113,30 @@ npm test
 
 ---
 
-### 3. `/remind-delete` — 刪除提醒
+### 3. `/remind-edit` — 編輯提醒
+
+涉及函式：`applyReminderEdits`
+
+#### `applyReminderEdits(existing, patches)`
+
+將 `patches` 套用到現有提醒物件，`patches` 中存在的 key 覆蓋舊值，不存在的 key 保留 `existing` 的值。
+
+| 測試案例 | 說明 |
+|---------|------|
+| 無 patches | 所有欄位保留 existing 的值 |
+| 只改 message | 僅 message 改變，其餘保留 |
+| 只改 date | 僅 dateStr 改變，其餘保留 |
+| 只改 time | 僅 timeStr 改變，其餘保留 |
+| 只改 remindDate | 僅 remindDateStr 改變，其餘保留 |
+| 只改 remindTime | 僅 remindTimeRaw 改變，其餘保留 |
+| 同時改多個欄位 | 多個欄位同時更新，未指定的保留 |
+| existing 無 remindDate | remindDateStr 預設為空字串 `""` |
+| patch remindDate 為空字串 | 清除提醒日期，remindDateStr 為 `""` |
+| patch time 為空字串 | 清除事件時間，timeStr 為 `""` |
+
+---
+
+### 4. `/remind-delete` — 刪除提醒
 
 涉及函式：`formatEventDate`
 
@@ -121,7 +144,7 @@ npm test
 
 ---
 
-### 4. `/remind-import` — 批次匯入
+### 5. `/remind-import` — 批次匯入
 
 涉及函式：`parseCSVLine`、`isDuplicateReminder`（其餘與 `/remind` 共用）
 
@@ -142,7 +165,7 @@ npm test
 
 ---
 
-### 5. `/help` — 查看說明
+### 6. `/help` — 查看說明
 
 本指令為靜態訊息輸出，無純函式邏輯，不需單元測試。
 

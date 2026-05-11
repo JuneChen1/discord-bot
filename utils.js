@@ -93,6 +93,18 @@ function isDuplicateReminder(reminders, { userId, eventDate, eventTime, message,
   );
 }
 
+// 將 patches 套用到現有提醒，未提供的欄位保留 existing 的值
+// patches 中的 key 存在表示要更新，不存在表示保留舊值
+function applyReminderEdits(existing, patches) {
+  return {
+    dateStr:       'date'       in patches ? patches.date       : existing.eventDate,
+    message:       'message'    in patches ? patches.message    : existing.message,
+    timeStr:       'time'       in patches ? patches.time       : existing.eventTime,
+    remindDateStr: 'remindDate' in patches ? patches.remindDate : (existing.remindDate ?? ''),
+    remindTimeRaw: 'remindTime' in patches ? patches.remindTime : existing.remindTime,
+  };
+}
+
 module.exports = {
   DEFAULT_REMIND_HOUR,
   DEFAULT_REMIND_MINUTE,
@@ -103,4 +115,5 @@ module.exports = {
   parseRemindTime,
   calcReminderTime,
   isDuplicateReminder,
+  applyReminderEdits,
 };

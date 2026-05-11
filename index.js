@@ -13,8 +13,6 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const {
-  DEFAULT_REMIND_HOUR,
-  DEFAULT_REMIND_MINUTE,
   toMinutes,
   formatEventDate,
   formatTaipeiTime,
@@ -22,6 +20,7 @@ const {
   parseRemindTime,
   calcReminderTime,
   isDuplicateReminder,
+  applyReminderEdits,
 } = require('./utils');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -31,7 +30,6 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const REMINDERS_FILE = path.join(DATA_DIR, 'reminders.json');
 
-// 啟動時、/remind、/reminders、/remind-delete、/remind-import
 function loadReminders() {
   if (fs.existsSync(REMINDERS_FILE)) {
     try {
@@ -43,7 +41,6 @@ function loadReminders() {
   return [];
 }
 
-// /remind、/remind-delete、/remind-import、提醒觸發後（fireReminder）
 function saveReminders(reminders) {
   fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf8');
 }
@@ -123,6 +120,29 @@ const commandDefs = [
     .toJSON(),
 
   new SlashCommandBuilder()
+    .setName('remind-edit')
+    .setDescription('透過 ID 編輯已設定的提醒（至少修改一個欄位）')
+    .addStringOption((opt) =>
+      opt.setName('id').setDescription('提醒 ID（可從 /reminders 查詢）').setRequired(true)
+    )
+    .addStringOption((opt) =>
+      opt.setName('message').setDescription('新的提醒內容').setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt.setName('date').setDescription('新的事件日期，格式 YYYYMMDD').setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt.setName('time').setDescription('新的事件時間，格式 HH:MM').setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt.setName('remind_date').setDescription('新的提醒日期，格式 YYYYMMDD').setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt.setName('remind_time').setDescription('新的提醒時間，格式 HH:MM').setRequired(false)
+    )
+    .toJSON(),
+
+  new SlashCommandBuilder()
     .setName('remind-delete')
     .setDescription('刪除待發送的提醒，支援多個 ID（空白隔開）')
     .addStringOption((opt) =>
@@ -148,7 +168,7 @@ client.once('clientReady', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(Routes.applicationCommands(client.user.id), { body: commandDefs });
   console.log(`Bot 已上線：${client.user.tag}`);
-  console.log('已註冊指令：remind, reminders, remind-delete, remind-import, help');
+  console.log('已註冊指令：remind, reminders, remind-edit, remind-delete, remind-import, help');
 
   // 載入並排程所有已存在的提醒，過期的直接刪除
   const reminders = loadReminders();
@@ -308,6 +328,152 @@ client.on('interactionCreate', async (interaction) => {
         value: `💬 ${r.message}\n📍 <#${r.channelId}>\n🆔 \`${r.id}\`\n​`,
       });
     }
+
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  // ── /remind-edit ─────────────────────────────────────────
+  if (cmd === 'remind-edit') {
+    const targetId = interaction.options.getString('id').trim();
+    const newMessage = interaction.options.getString('message');
+    const newDateStr = interaction.options.getString('date');
+    const newTimeStr = interaction.options.getString('time');
+    const newRemindDateStr = interaction.options.getString('remind_date');
+    const newRemindTimeStr = interaction.options.getString('remind_time');
+
+    if (newMessage === null && newDateStr === null && newTimeStr === null && newRemindDateStr === null && newRemindTimeStr === null) {
+      await interaction.reply({
+        content: '❌ 請至少提供一個要修改的欄位（message、date、time、remind_date、remind_time）。',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const reminders = loadReminders();
+    const idx = reminders.findIndex(r => r.id === targetId);
+
+    if (idx === -1) {
+      await interaction.reply({
+        content: `❌ 找不到 ID 為 \`${targetId}\` 的提醒。`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const existing = reminders[idx];
+
+    if (existing.userId !== userId) {
+      await interaction.reply({
+        content: '❌ 你只能編輯自己的提醒。',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const patches = {};
+    if (newDateStr !== null) patches.date = newDateStr;
+    if (newMessage !== null) patches.message = newMessage;
+    if (newTimeStr !== null) patches.time = newTimeStr;
+    if (newRemindDateStr !== null) patches.remindDate = newRemindDateStr;
+    if (newRemindTimeStr !== null) patches.remindTime = newRemindTimeStr;
+
+    const { dateStr, message, timeStr, remindDateStr, remindTimeRaw } = applyReminderEdits(existing, patches);
+
+    const parsedRemindTime = parseRemindTime(remindTimeRaw || null);
+    if (!parsedRemindTime) {
+      await interaction.reply({
+        content: '❌ 提醒時間格式錯誤！請使用 `HH:MM`，例如 `18:30`。',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (remindDateStr && !/^\d{8}$/.test(remindDateStr)) {
+      await interaction.reply({
+        content: '❌ 提醒日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260509`。',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (remindDateStr && remindDateStr > dateStr) {
+      await interaction.reply({
+        content: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
+
+    if (remindDateStr && remindDateStr === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
+      await interaction.reply({
+        content: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateStr || null);
+
+    if (!remindAt) {
+      await interaction.reply({
+        content: '❌ 日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260510`。',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (remindAt <= Date.now()) {
+      await interaction.reply({
+        content: `❌ 提醒時間 ${formatTaipeiTime(remindAt)} 已過，無法設定提醒！請調整事件日期或提醒時間。`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const otherReminders = reminders.filter(r => r.id !== targetId);
+    if (isDuplicateReminder(otherReminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateStr })) {
+      await interaction.reply({
+        content: `❌ 你在 \`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同內容的提醒：「${message}」`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    cancelReminder(targetId);
+
+    const updated = {
+      ...existing,
+      message,
+      eventDate: dateStr,
+      eventTime: timeStr,
+      remindTime: remindTimeDisplay,
+      remindAt,
+    };
+    if (remindDateStr) {
+      updated.remindDate = remindDateStr;
+    } else {
+      delete updated.remindDate;
+    }
+
+    reminders[idx] = updated;
+    saveReminders(reminders);
+    scheduleReminder(updated);
+
+    const eventDateFormatted = formatEventDate(dateStr);
+    const eventDateDisplay = timeStr ? `${eventDateFormatted}　🕐 ${timeStr}` : eventDateFormatted;
+    const embed = new EmbedBuilder()
+      .setTitle('✏️ 提醒已更新')
+      .addFields(
+        { name: '📅 事件日期', value: eventDateDisplay, inline: true },
+        { name: '📍 頻道', value: `<#${existing.channelId}>`, inline: true },
+        { name: '💬 內容', value: message },
+        { name: '⏰ 提醒時間', value: formatTaipeiTime(remindAt) }
+      )
+      .setColor(0x5865f2)
+      .setFooter({ text: `ID: ${targetId}` });
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
@@ -513,11 +679,15 @@ client.on('interactionCreate', async (interaction) => {
       .addFields(
         {
           name: '/remind',
-          value: '設定提醒，將在指定日期（預設事件前一天）的指定時間發送（預設 22:00 台灣時間）\n`date` 事件日期（YYYYMMDD）　`message` 提醒內容　`time` 事件時間（HH:MM，選填）　`remind_time` 提醒時間（HH:MM，預設 22:00）　`remind_date` 提醒日期（YYYYMMDD，預設前一天）\n​',
+          value: '設定提醒，將在指定日期的指定時間發送\n`date` 事件日期（YYYYMMDD）　`message` 提醒內容　`time` 事件時間（HH:MM，選填）　`remind_time` 提醒時間（HH:MM，預設 22:00）　`remind_date` 提醒日期（YYYYMMDD，預設前一天）\n​',
         },
         {
           name: '/reminders',
           value: '查看你所有待發送的提醒\n​',
+        },
+        {
+          name: '/remind-edit',
+          value: '透過 ID 編輯已設定的提醒，未填寫的欄位將保留原有值\n`id` 提醒 ID（必填）　`message` 新內容　`date` 新事件日期（YYYYMMDD）　`time` 新事件時間（HH:MM）　`remind_date` 新提醒日期（YYYYMMDD）　`remind_time` 新提醒時間（HH:MM）\n​',
         },
         {
           name: '/remind-delete',

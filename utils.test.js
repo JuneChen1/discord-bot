@@ -10,7 +10,89 @@ const {
   parseRemindTime,
   calcReminderTime,
   isDuplicateReminder,
+  applyReminderEdits,
 } = require('./utils');
+
+// ── applyReminderEdits ────────────────────────────────────
+
+describe('applyReminderEdits', () => {
+  const EXISTING = {
+    eventDate: '20260510',
+    message: '會議',
+    eventTime: '14:30',
+    remindDate: '20260509',
+    remindTime: '22:00',
+  };
+
+  test('無 patches → 全部保留 existing', () => {
+    assert.deepEqual(applyReminderEdits(EXISTING, {}), {
+      dateStr: '20260510',
+      message: '會議',
+      timeStr: '14:30',
+      remindDateStr: '20260509',
+      remindTimeRaw: '22:00',
+    });
+  });
+
+  test('只改 message', () => {
+    const result = applyReminderEdits(EXISTING, { message: '新主題' });
+    assert.equal(result.message, '新主題');
+    assert.equal(result.dateStr, '20260510');
+    assert.equal(result.timeStr, '14:30');
+    assert.equal(result.remindDateStr, '20260509');
+    assert.equal(result.remindTimeRaw, '22:00');
+  });
+
+  test('只改 date', () => {
+    const result = applyReminderEdits(EXISTING, { date: '20260601' });
+    assert.equal(result.dateStr, '20260601');
+    assert.equal(result.message, '會議');
+  });
+
+  test('只改 time', () => {
+    const result = applyReminderEdits(EXISTING, { time: '16:00' });
+    assert.equal(result.timeStr, '16:00');
+    assert.equal(result.dateStr, '20260510');
+  });
+
+  test('只改 remindDate', () => {
+    const result = applyReminderEdits(EXISTING, { remindDate: '20260508' });
+    assert.equal(result.remindDateStr, '20260508');
+    assert.equal(result.remindTimeRaw, '22:00');
+  });
+
+  test('只改 remindTime', () => {
+    const result = applyReminderEdits(EXISTING, { remindTime: '09:00' });
+    assert.equal(result.remindTimeRaw, '09:00');
+    assert.equal(result.remindDateStr, '20260509');
+  });
+
+  test('同時改多個欄位', () => {
+    const result = applyReminderEdits(EXISTING, { message: '新主題', date: '20260601', remindTime: '08:00' });
+    assert.equal(result.message, '新主題');
+    assert.equal(result.dateStr, '20260601');
+    assert.equal(result.remindTimeRaw, '08:00');
+    assert.equal(result.timeStr, '14:30');
+    assert.equal(result.remindDateStr, '20260509');
+  });
+
+  test('existing 沒有 remindDate → remindDateStr 預設為空字串', () => {
+    const withoutRemindDate = { ...EXISTING };
+    delete withoutRemindDate.remindDate;
+    const result = applyReminderEdits(withoutRemindDate, {});
+    assert.equal(result.remindDateStr, '');
+  });
+
+  test('patch remindDate 為空字串（清除提醒日期）', () => {
+    const result = applyReminderEdits(EXISTING, { remindDate: '' });
+    assert.equal(result.remindDateStr, '');
+  });
+
+  test('patch time 為空字串（清除事件時間）', () => {
+    const result = applyReminderEdits(EXISTING, { time: '' });
+    assert.equal(result.timeStr, '');
+  });
+});
 
 // ── isDuplicateReminder ───────────────────────────────────
 
