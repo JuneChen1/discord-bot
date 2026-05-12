@@ -1,0 +1,3 @@
+[submodule "june-claude-skills"]
+	path = june-claude-skills
+	url = https://github.com/JuneChen1/june-claude-skills.git
