@@ -70,7 +70,7 @@
 |------|------|------|
 | file | 是 | CSV 附件，欄位依序為 `date`、`message`、`time`、`remind_time`、`remind_date`（後三欄選填） |
 
-CSV 格式請查看 [reminders_template.csv](reminders_template.csv)。
+CSV 格式請查看 [reminders_template.csv](templates/reminders_template.csv)。
 
 同一日期時間若已有相同內容的提醒，該列將跳過並在結果中標示失敗。
 
