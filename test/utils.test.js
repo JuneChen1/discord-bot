@@ -12,7 +12,7 @@ const {
   filterRemindersByRange,
   isDuplicateReminder,
   applyReminderEdits,
-} = require('./utils');
+} = require('../utils');
 
 // ── filterRemindersByRange ────────────────────────────────
 
