@@ -12,6 +12,11 @@ const path = require('path');
 
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+if (!process.env.DISCORD_TOKEN) {
+  console.error('缺少環境變數 DISCORD_TOKEN');
+  process.exit(1);
+}
+
 const {
   toMinutes,
   formatEventDate,
@@ -32,40 +37,45 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const REMINDERS_FILE = path.join(DATA_DIR, 'reminders.json');
 
-function loadReminders() {
-  if (fs.existsSync(REMINDERS_FILE)) {
-    try {
-      return JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8'));
-    } catch {
-      return [];
-    }
+async function loadReminders() {
+  try {
+    const data = await fs.promises.readFile(REMINDERS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('reminders.json 讀取失敗：', err);
+    return [];
   }
-  return [];
 }
 
-function saveReminders(reminders) {
-  fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf8');
+async function saveReminders(reminders) {
+  await fs.promises.writeFile(REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf8');
 }
 
 // setTimeout 最大值約 24.8 天，超過需分段遞迴
 const MAX_TIMEOUT_MS = 2147483647;
+const MAX_EMBED_FIELDS = 25;
 
 // reminder.id -> timer handle，用於取消
 const activeTimers = new Map();
 
 // 排程觸發（內部呼叫，非使用者指令）
 async function fireReminder(reminder) {
-  activeTimers.delete(reminder.id);
-  saveReminders(loadReminders().filter(r => r.id !== reminder.id));
-  const channel = client.channels.cache.get(reminder.channelId);
-  if (channel) {
-    const embed = new EmbedBuilder()
-      .setTitle('⏰ 提醒')
-      .setDescription(reminder.message)
-      .setColor(0x5865f2)
-      .setFooter({ text: `由 ${reminder.userName} 設定` })
-      .setTimestamp();
-    await channel.send({ content: `<@${reminder.userId}>`, embeds: [embed] }).catch(() => {});
+  try {
+    activeTimers.delete(reminder.id);
+    const reminders = await loadReminders();
+    await saveReminders(reminders.filter(r => r.id !== reminder.id));
+    const channel = client.channels.cache.get(reminder.channelId);
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setTitle('⏰ 提醒')
+        .setDescription(reminder.message)
+        .setColor(0x5865f2)
+        .setFooter({ text: `由 ${reminder.userName} 設定` })
+        .setTimestamp();
+      await channel.send({ content: `<@${reminder.userId}>`, embeds: [embed] }).catch(() => {});
+    }
+  } catch (err) {
+    console.error(`[fireReminder] 提醒 ${reminder.id} 發送失敗：`, err);
   }
 }
 
@@ -97,6 +107,20 @@ function getTargetChannel(interaction) {
   return (process.env.REMINDER_CHANNEL_ID
     ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
     : null) ?? interaction.channel;
+}
+
+function truncateList(lines, limit = 1000) {
+  const joined = lines.join('\n');
+  if (joined.length <= limit) return joined;
+  let result = '';
+  let shown = 0;
+  for (const line of lines) {
+    const candidate = result ? `${result}\n${line}` : line;
+    if (candidate.length > limit - 20) break;
+    result = candidate;
+    shown++;
+  }
+  return `${result}\n…等 ${lines.length - shown} 筆`;
 }
 
 function reminderToField(r) {
@@ -205,12 +229,12 @@ client.once('clientReady', async () => {
   console.log('已註冊指令：remind, reminders, reminders-range, remind-edit, remind-delete, remind-import, help');
 
   // 載入並排程所有已存在的提醒，過期的直接刪除
-  const reminders = loadReminders();
+  const reminders = await loadReminders();
   const now = Date.now();
   const expired = reminders.filter(r => r.remindAt <= now);
   const valid = reminders.filter(r => r.remindAt > now);
   if (expired.length > 0) {
-    saveReminders(valid);
+    await saveReminders(valid);
     console.log(`已刪除 ${expired.length} 個過期提醒：${expired.map(r => r.message).join(', ')}`);
   }
   valid.forEach(scheduleReminder);
@@ -237,7 +261,7 @@ async function handleInteraction(interaction) {
     }
     const { remindTimeDisplay, remindAt } = validated;
 
-    const reminders = loadReminders();
+    const reminders = await loadReminders();
 
     const duplicate = isDuplicateReminder(reminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateStr });
     if (duplicate) {
@@ -248,7 +272,7 @@ async function handleInteraction(interaction) {
       return;
     }
 
-    const id = `${userId}-${Date.now()}`;
+    const id = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const reminder = {
       id,
       userId,
@@ -263,7 +287,7 @@ async function handleInteraction(interaction) {
     };
 
     reminders.push(reminder);
-    saveReminders(reminders);
+    await saveReminders(reminders);
     scheduleReminder(reminder);
 
     const displayRemindTime = formatTaipeiTime(remindAt);
@@ -287,7 +311,7 @@ async function handleInteraction(interaction) {
 
   // ── /reminders ───────────────────────────────────────────
   if (cmd === 'reminders') {
-    const reminders = loadReminders().filter(r => r.userId === userId);
+    const reminders = (await loadReminders()).filter(r => r.userId === userId);
 
     if (reminders.length === 0) {
       await interaction.reply({ content: '📭 你目前沒有任何待發送的提醒。', flags: MessageFlags.Ephemeral });
@@ -295,12 +319,17 @@ async function handleInteraction(interaction) {
     }
 
     const sorted = reminders.sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+    const shown = sorted.slice(0, MAX_EMBED_FIELDS);
+    const overflow = sorted.length - shown.length;
     const embed = new EmbedBuilder()
       .setTitle('📋 你的提醒清單')
       .setColor(0x5865f2);
 
-    for (const r of sorted) {
+    for (const r of shown) {
       embed.addFields(reminderToField(r));
+    }
+    if (overflow > 0) {
+      embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -322,18 +351,24 @@ async function handleInteraction(interaction) {
     }
 
     const rangeLabel = fromStr === toStr ? formatEventDate(fromStr) : `${formatEventDate(fromStr)} ～ ${formatEventDate(toStr)}`;
-    const inRange = filterRemindersByRange(loadReminders(), userId, fromStr, toStr);
+    const inRange = filterRemindersByRange(await loadReminders(), userId, fromStr, toStr);
 
     if (inRange.length === 0) {
       await interaction.reply({ content: `📭 ${rangeLabel} 沒有任何提醒。`, flags: MessageFlags.Ephemeral });
       return;
     }
+
+    const shown = inRange.slice(0, MAX_EMBED_FIELDS);
+    const overflow = inRange.length - shown.length;
     const embed = new EmbedBuilder()
       .setTitle(`📋 提醒清單（${rangeLabel}）`)
       .setColor(0x5865f2);
 
-    for (const r of inRange) {
+    for (const r of shown) {
       embed.addFields(reminderToField(r));
+    }
+    if (overflow > 0) {
+      embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -357,7 +392,7 @@ async function handleInteraction(interaction) {
       return;
     }
 
-    const reminders = loadReminders();
+    const reminders = await loadReminders();
     const idx = reminders.findIndex(r => r.id === targetId);
 
     if (idx === -1) {
@@ -420,7 +455,7 @@ async function handleInteraction(interaction) {
     }
 
     reminders[idx] = updated;
-    saveReminders(reminders);
+    await saveReminders(reminders);
     scheduleReminder(updated);
 
     const eventDateFormatted = formatEventDate(dateStr);
@@ -443,7 +478,7 @@ async function handleInteraction(interaction) {
   // ── /remind-delete ────────────────────────────────────────
   if (cmd === 'remind-delete') {
     const ids = interaction.options.getString('id').trim().split(/\s+/);
-    const reminders = loadReminders();
+    const reminders = await loadReminders();
     const deleted = [];
     const failed = [];
 
@@ -467,7 +502,9 @@ async function handleInteraction(interaction) {
       reminders.splice(idx, 1);
     }
 
-    saveReminders(reminders);
+    if (deleted.length > 0) {
+      await saveReminders(reminders);
+    }
 
     const color = failed.length === 0 ? 0x57f287 : deleted.length === 0 ? 0xed4245 : 0xfee75c;
     const embed = new EmbedBuilder()
@@ -475,10 +512,10 @@ async function handleInteraction(interaction) {
       .setColor(color);
 
     if (deleted.length > 0) {
-      embed.addFields({ name: `✅ 已刪除 ${deleted.length} 筆`, value: deleted.join('\n') });
+      embed.addFields({ name: `✅ 已刪除 ${deleted.length} 筆`, value: truncateList(deleted) });
     }
     if (failed.length > 0) {
-      embed.addFields({ name: `❌ 失敗 ${failed.length} 筆`, value: failed.join('\n') });
+      embed.addFields({ name: `❌ 失敗 ${failed.length} 筆`, value: truncateList(failed) });
     }
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -509,7 +546,7 @@ async function handleInteraction(interaction) {
     }
 
     // 去掉 UTF-8 BOM（Excel 存出的 CSV 會帶這個）
-    text = text.replace(/^﻿/, '');
+    text = text.replace(/^\uFEFF/, '');
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
     if (lines.length === 0) {
       await interaction.editReply('❌ CSV 檔案是空的。');
@@ -527,7 +564,8 @@ async function handleInteraction(interaction) {
 
     const success = [];
     const failed = [];
-    const reminders = loadReminders();
+    const toSchedule = [];
+    const reminders = await loadReminders();
     const now = Date.now();
 
     for (let i = 0; i < dataLines.length; i++) {
@@ -587,7 +625,7 @@ async function handleInteraction(interaction) {
         continue;
       }
 
-      const id = `${userId}-${Date.now()}-${i}`;
+      const id = `${userId}-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`;
       const reminder = {
         id,
         userId,
@@ -602,12 +640,13 @@ async function handleInteraction(interaction) {
       };
 
       reminders.push(reminder);
-      scheduleReminder(reminder);
+      toSchedule.push(reminder);
       const eventDisplay = timeStr ? `${formatEventDate(dateStr)} ${timeStr}` : formatEventDate(dateStr);
       success.push(`\`${eventDisplay}\`　${message}`);
     }
 
-    saveReminders(reminders);
+    await saveReminders(reminders);
+    toSchedule.forEach(scheduleReminder);
 
     const color =
       failed.length === 0 ? 0x57f287 :
@@ -619,10 +658,10 @@ async function handleInteraction(interaction) {
       .setColor(color);
 
     if (success.length > 0) {
-      embed.addFields({ name: `✅ 成功 ${success.length} 筆`, value: success.join('\n') });
+      embed.addFields({ name: `✅ 成功 ${success.length} 筆`, value: truncateList(success) });
     }
     if (failed.length > 0) {
-      embed.addFields({ name: `❌ 失敗 ${failed.length} 筆`, value: failed.join('\n') });
+      embed.addFields({ name: `❌ 失敗 ${failed.length} 筆`, value: truncateList(failed) });
     }
 
     await interaction.editReply({ embeds: [embed] });
@@ -641,7 +680,7 @@ async function handleInteraction(interaction) {
         },
         {
           name: '/reminders',
-          value: '查看你所有待發送的提醒\n​',
+          value: '查看你所有待發送的提醒\n（一次最多顯示 25 筆，可使用 `/reminders-range` 縮小範圍）\n​',
         },
         {
           name: '/reminders-range',
