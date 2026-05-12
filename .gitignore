@@ -6,3 +6,4 @@ reminders.json
 reminders_export.csv
 *.log
 Thumbs.db
+.claude/settings.local.json

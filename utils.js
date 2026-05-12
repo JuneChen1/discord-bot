@@ -81,6 +81,13 @@ function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remind
   return remindDay.getTime();
 }
 
+// 依事件日期區間篩選並排序（toStr 為空字串表示無上限）
+function filterRemindersByRange(reminders, userId, fromStr, toStr) {
+  return reminders
+    .filter(r => r.userId === userId && r.eventDate >= fromStr && (!toStr || r.eventDate <= toStr))
+    .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+}
+
 // 判斷 reminders 中是否已有相同使用者、日期、時間、內容、提醒設定的重複項目
 function isDuplicateReminder(reminders, { userId, eventDate, eventTime, message, remindTime, remindDate }) {
   return reminders.some(r =>
@@ -91,6 +98,40 @@ function isDuplicateReminder(reminders, { userId, eventDate, eventTime, message,
     r.remindTime === remindTime &&
     (r.remindDate ?? '') === remindDate
   );
+}
+
+// 驗證提醒時間相關欄位，回傳 { error } 或 { remindTimeDisplay, remindAt }
+function validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw }, now = Date.now()) {
+  const parsedRemindTime = parseRemindTime(remindTimeRaw || null);
+  if (!parsedRemindTime) {
+    return { error: '❌ 提醒時間格式錯誤！請使用 `HH:MM`，例如 `18:30`。' };
+  }
+
+  if (remindDateStr && !/^\d{8}$/.test(remindDateStr)) {
+    return { error: '❌ 提醒日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260509`。' };
+  }
+
+  if (remindDateStr && remindDateStr > dateStr) {
+    return { error: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！` };
+  }
+
+  const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
+
+  if (remindDateStr && remindDateStr === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
+    return { error: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！` };
+  }
+
+  const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateStr || null);
+
+  if (!remindAt) {
+    return { error: '❌ 日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260510`。' };
+  }
+
+  if (remindAt <= now) {
+    return { error: `❌ 提醒時間 ${formatTaipeiTime(remindAt)} 已過，無法設定提醒！請調整事件日期或提醒時間。` };
+  }
+
+  return { remindTimeDisplay, remindAt };
 }
 
 // 將 patches 套用到現有提醒，未提供的欄位保留 existing 的值
@@ -114,6 +155,8 @@ module.exports = {
   parseCSVLine,
   parseRemindTime,
   calcReminderTime,
+  filterRemindersByRange,
+  validateReminderInput,
   isDuplicateReminder,
   applyReminderEdits,
 };

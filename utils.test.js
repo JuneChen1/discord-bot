@@ -9,9 +9,64 @@ const {
   parseCSVLine,
   parseRemindTime,
   calcReminderTime,
+  filterRemindersByRange,
   isDuplicateReminder,
   applyReminderEdits,
 } = require('./utils');
+
+// ── filterRemindersByRange ────────────────────────────────
+
+describe('filterRemindersByRange', () => {
+  const r = (userId, eventDate) => ({ userId, eventDate, remindAt: 0 });
+
+  const REMINDERS = [
+    r('u1', '20260601'),
+    r('u1', '20260615'),
+    r('u1', '20260630'),
+    r('u1', '20260701'),
+    r('u2', '20260610'),
+  ];
+
+  test('有 from 和 to：只回傳區間內（含邊界）', () => {
+    const result = filterRemindersByRange(REMINDERS, 'u1', '20260601', '20260630');
+    assert.deepEqual(result.map(r => r.eventDate), ['20260601', '20260615', '20260630']);
+  });
+
+  test('to 等於 from：只回傳當天', () => {
+    const result = filterRemindersByRange(REMINDERS, 'u1', '20260615', '20260615');
+    assert.deepEqual(result.map(r => r.eventDate), ['20260615']);
+  });
+
+  test('無上限（toStr 空字串）：回傳 from 之後所有提醒', () => {
+    const result = filterRemindersByRange(REMINDERS, 'u1', '20260615', '');
+    assert.deepEqual(result.map(r => r.eventDate), ['20260615', '20260630', '20260701']);
+  });
+
+  test('不同使用者的提醒不回傳', () => {
+    const result = filterRemindersByRange(REMINDERS, 'u1', '20260601', '20260630');
+    assert.ok(result.every(r => r.userId === 'u1'));
+  });
+
+  test('區間內無符合 → 空陣列', () => {
+    const result = filterRemindersByRange(REMINDERS, 'u1', '20260801', '20260831');
+    assert.deepEqual(result, []);
+  });
+
+  test('空 reminders → 空陣列', () => {
+    assert.deepEqual(filterRemindersByRange([], 'u1', '20260601', '20260630'), []);
+  });
+
+  test('結果依 eventDate 升冪排序', () => {
+    const unsorted = [r('u1', '20260630'), r('u1', '20260601'), r('u1', '20260615')];
+    const result = filterRemindersByRange(unsorted, 'u1', '20260601', '20260630');
+    assert.deepEqual(result.map(r => r.eventDate), ['20260601', '20260615', '20260630']);
+  });
+
+  test('跨月區間', () => {
+    const result = filterRemindersByRange(REMINDERS, 'u1', '20260601', '20260701');
+    assert.deepEqual(result.map(r => r.eventDate), ['20260601', '20260615', '20260630', '20260701']);
+  });
+});
 
 // ── applyReminderEdits ────────────────────────────────────
 

@@ -113,7 +113,28 @@ npm test
 
 ---
 
-### 3. `/remind-edit` — 編輯提醒
+### 3. `/reminders-range` — 區間查詢提醒
+
+涉及函式：`filterRemindersByRange`
+
+#### `filterRemindersByRange(reminders, userId, fromStr, toStr)`
+
+依事件日期區間篩選提醒，只回傳指定使用者的資料，結果依 `eventDate` 升冪排序。`toStr` 為空字串時無上限。
+
+| 測試案例 | 說明 |
+|---------|------|
+| 有 from 和 to | 只回傳區間內的提醒（含邊界） |
+| 無 to（空字串） | 回傳 from 當天（含）之後所有提醒 |
+| from 等於 to | 只回傳當天的提醒 |
+| 不同使用者 | 其他使用者的提醒不回傳 |
+| 區間內無符合 | 回傳空陣列 |
+| 空 reminders | 回傳空陣列 |
+| 結果排序 | 多筆結果依 eventDate 升冪排列 |
+| 跨月區間 | 跨越月份邊界的區間正確篩選 |
+
+---
+
+### 4. `/remind-edit` — 編輯提醒
 
 涉及函式：`applyReminderEdits`
 
@@ -136,7 +157,7 @@ npm test
 
 ---
 
-### 4. `/remind-delete` — 刪除提醒
+### 5. `/remind-delete` — 刪除提醒
 
 涉及函式：`formatEventDate`
 
@@ -144,7 +165,7 @@ npm test
 
 ---
 
-### 5. `/remind-import` — 批次匯入
+### 6. `/remind-import` — 批次匯入
 
 涉及函式：`parseCSVLine`、`isDuplicateReminder`（其餘與 `/remind` 共用）
 
@@ -165,7 +186,7 @@ npm test
 
 ---
 
-### 6. `/help` — 查看說明
+### 7. `/help` — 查看說明
 
 本指令為靜態訊息輸出，無純函式邏輯，不需單元測試。
 

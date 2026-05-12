@@ -19,6 +19,8 @@ const {
   parseCSVLine,
   parseRemindTime,
   calcReminderTime,
+  filterRemindersByRange,
+  validateReminderInput,
   isDuplicateReminder,
   applyReminderEdits,
 } = require('./utils');
@@ -54,6 +56,7 @@ const activeTimers = new Map();
 // 排程觸發（內部呼叫，非使用者指令）
 async function fireReminder(reminder) {
   activeTimers.delete(reminder.id);
+  saveReminders(loadReminders().filter(r => r.id !== reminder.id));
   const channel = client.channels.cache.get(reminder.channelId);
   if (channel) {
     const embed = new EmbedBuilder()
@@ -64,7 +67,6 @@ async function fireReminder(reminder) {
       .setTimestamp();
     await channel.send({ content: `<@${reminder.userId}>`, embeds: [embed] }).catch(() => {});
   }
-  saveReminders(loadReminders().filter(r => r.id !== reminder.id));
 }
 
 // 啟動時、/remind、/remind-import
@@ -89,6 +91,22 @@ function cancelReminder(reminderId) {
     clearTimeout(handle);
     activeTimers.delete(reminderId);
   }
+}
+
+function getTargetChannel(interaction) {
+  return (process.env.REMINDER_CHANNEL_ID
+    ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
+    : null) ?? interaction.channel;
+}
+
+function reminderToField(r) {
+  const eventDate = r.eventDate ? formatEventDate(r.eventDate) : '未知';
+  const remindTime = formatTaipeiTime(r.remindAt);
+  const eventTimeDisplay = r.eventTime ? `　🕐 ${r.eventTime}` : '';
+  return {
+    name: `📅 事件：${eventDate}${eventTimeDisplay}　⏰ 提醒：${remindTime}`,
+    value: `💬 ${r.message}\n📍 <#${r.channelId}>\n🆔 \`${r.id}\`\n​`,
+  };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -117,6 +135,17 @@ const commandDefs = [
   new SlashCommandBuilder()
     .setName('reminders')
     .setDescription('查看你所有待發送的提醒')
+    .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName('reminders-range')
+    .setDescription('查看指定事件日期區間內的提醒')
+    .addStringOption((opt) =>
+      opt.setName('from').setDescription('起始日期，格式 YYYYMMDD，例如 20260601').setRequired(true)
+    )
+    .addStringOption((opt) =>
+      opt.setName('to').setDescription('結束日期，格式 YYYYMMDD，例如 20260630（不填則只查 from 當天）').setRequired(false)
+    )
     .toJSON(),
 
   new SlashCommandBuilder()
@@ -166,9 +195,14 @@ const commandDefs = [
 
 client.once('clientReady', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: commandDefs });
+  try {
+    await rest.put(Routes.applicationCommands(client.user.id), { body: commandDefs });
+  } catch (err) {
+    console.error('指令註冊失敗：', err);
+    process.exit(1);
+  }
   console.log(`Bot 已上線：${client.user.tag}`);
-  console.log('已註冊指令：remind, reminders, remind-edit, remind-delete, remind-import, help');
+  console.log('已註冊指令：remind, reminders, reminders-range, remind-edit, remind-delete, remind-import, help');
 
   // 載入並排程所有已存在的提醒，過期的直接刪除
   const reminders = loadReminders();
@@ -183,9 +217,7 @@ client.once('clientReady', async () => {
   console.log(`已排程 ${valid.length} 個提醒`);
 });
 
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
+async function handleInteraction(interaction) {
   const userId = interaction.user.id;
   const cmd = interaction.commandName;
 
@@ -196,65 +228,14 @@ client.on('interactionCreate', async (interaction) => {
     const timeStr = interaction.options.getString('time') ?? '';
     const remindTimeStr = interaction.options.getString('remind_time') ?? '';
     const remindDateStr = interaction.options.getString('remind_date') ?? '';
-    const targetChannel =
-      (process.env.REMINDER_CHANNEL_ID
-        ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
-        : null) ??
-      interaction.channel;
+    const targetChannel = getTargetChannel(interaction);
 
-    const parsedRemindTime = parseRemindTime(remindTimeStr || null);
-    if (!parsedRemindTime) {
-      await interaction.reply({
-        content: '❌ 提醒時間格式錯誤！請使用 `HH:MM`，例如 `18:30`。',
-        flags: MessageFlags.Ephemeral,
-      });
+    const validated = validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw: remindTimeStr });
+    if (validated.error) {
+      await interaction.reply({ content: validated.error, flags: MessageFlags.Ephemeral });
       return;
     }
-
-    if (remindDateStr && !/^\d{8}$/.test(remindDateStr)) {
-      await interaction.reply({
-        content: '❌ 提醒日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260509`。',
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (remindDateStr && remindDateStr > dateStr) {
-      await interaction.reply({
-        content: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateStr || null);
-
-    if (!remindAt) {
-      await interaction.reply({
-        content: '❌ 日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260510`。',
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
-
-    if (remindDateStr && remindDateStr === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
-      await interaction.reply({
-        content: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (remindAt <= Date.now()) {
-      const remindAtDisplay = formatTaipeiTime(remindAt);
-      await interaction.reply({
-        content: `❌ 提醒時間 ${remindAtDisplay} 已過，無法設定提醒！請調整事件日期或提醒時間。`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+    const { remindTimeDisplay, remindAt } = validated;
 
     const reminders = loadReminders();
 
@@ -313,20 +294,46 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    const sorted = reminders.sort((a, b) => a.remindAt - b.remindAt);
+    const sorted = reminders.sort((a, b) => a.eventDate.localeCompare(b.eventDate));
     const embed = new EmbedBuilder()
       .setTitle('📋 你的提醒清單')
       .setColor(0x5865f2);
 
     for (const r of sorted) {
-      const rawDate = r.eventDate;
-      const eventDate = rawDate ? formatEventDate(rawDate) : '未知';
-      const remindTime = formatTaipeiTime(r.remindAt);
-      const eventTimeDisplay = r.eventTime ? `　🕐 ${r.eventTime}` : '';
-      embed.addFields({
-        name: `📅 事件：${eventDate}${eventTimeDisplay}　⏰ 提醒：${remindTime}`,
-        value: `💬 ${r.message}\n📍 <#${r.channelId}>\n🆔 \`${r.id}\`\n​`,
-      });
+      embed.addFields(reminderToField(r));
+    }
+
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  // ── /reminders-range ─────────────────────────────────────
+  if (cmd === 'reminders-range') {
+    const fromStr = interaction.options.getString('from').trim();
+    const toStr = (interaction.options.getString('to') ?? '').trim() || fromStr;
+
+    if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
+      await interaction.reply({ content: '❌ 日期格式錯誤，請使用 YYYYMMDD（例如 20260601）。', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    if (fromStr > toStr) {
+      await interaction.reply({ content: '❌ 起始日期不可晚於結束日期。', flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    const rangeLabel = fromStr === toStr ? formatEventDate(fromStr) : `${formatEventDate(fromStr)} ～ ${formatEventDate(toStr)}`;
+    const inRange = filterRemindersByRange(loadReminders(), userId, fromStr, toStr);
+
+    if (inRange.length === 0) {
+      await interaction.reply({ content: `📭 ${rangeLabel} 沒有任何提醒。`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const embed = new EmbedBuilder()
+      .setTitle(`📋 提醒清單（${rangeLabel}）`)
+      .setColor(0x5865f2);
+
+    for (const r of inRange) {
+      embed.addFields(reminderToField(r));
     }
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -380,58 +387,12 @@ client.on('interactionCreate', async (interaction) => {
 
     const { dateStr, message, timeStr, remindDateStr, remindTimeRaw } = applyReminderEdits(existing, patches);
 
-    const parsedRemindTime = parseRemindTime(remindTimeRaw || null);
-    if (!parsedRemindTime) {
-      await interaction.reply({
-        content: '❌ 提醒時間格式錯誤！請使用 `HH:MM`，例如 `18:30`。',
-        flags: MessageFlags.Ephemeral,
-      });
+    const validated = validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw });
+    if (validated.error) {
+      await interaction.reply({ content: validated.error, flags: MessageFlags.Ephemeral });
       return;
     }
-
-    if (remindDateStr && !/^\d{8}$/.test(remindDateStr)) {
-      await interaction.reply({
-        content: '❌ 提醒日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260509`。',
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (remindDateStr && remindDateStr > dateStr) {
-      await interaction.reply({
-        content: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
-
-    if (remindDateStr && remindDateStr === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
-      await interaction.reply({
-        content: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateStr || null);
-
-    if (!remindAt) {
-      await interaction.reply({
-        content: '❌ 日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260510`。',
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (remindAt <= Date.now()) {
-      await interaction.reply({
-        content: `❌ 提醒時間 ${formatTaipeiTime(remindAt)} 已過，無法設定提醒！請調整事件日期或提醒時間。`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+    const { remindTimeDisplay, remindAt } = validated;
 
     const otherReminders = reminders.filter(r => r.id !== targetId);
     if (isDuplicateReminder(otherReminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateStr })) {
@@ -487,11 +448,12 @@ client.on('interactionCreate', async (interaction) => {
     const failed = [];
 
     for (const targetId of ids) {
-      const target = reminders.find(r => r.id === targetId);
-      if (!target) {
+      const idx = reminders.findIndex(r => r.id === targetId);
+      if (idx === -1) {
         failed.push(`\`${targetId}\`：找不到此 ID，多個 ID 請用空白隔開`);
         continue;
       }
+      const target = reminders[idx];
       if (target.userId !== userId) {
         failed.push(`\`${targetId}\`：你只能刪除自己的提醒`);
         continue;
@@ -502,7 +464,7 @@ client.on('interactionCreate', async (interaction) => {
         ? `${formattedDeleteDate}　🕐 ${target.eventTime}`
         : formattedDeleteDate;
       deleted.push(`📅 ${dateDisplay}　💬 ${target.message}`);
-      reminders.splice(reminders.indexOf(target), 1);
+      reminders.splice(idx, 1);
     }
 
     saveReminders(reminders);
@@ -561,11 +523,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    const targetChannel =
-      (process.env.REMINDER_CHANNEL_ID
-        ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
-        : null) ??
-      interaction.channel;
+    const targetChannel = getTargetChannel(interaction);
 
     const success = [];
     const failed = [];
@@ -679,15 +637,19 @@ client.on('interactionCreate', async (interaction) => {
       .addFields(
         {
           name: '/remind',
-          value: '設定提醒，將在指定日期的指定時間發送\n`date` 事件日期（YYYYMMDD）　`message` 提醒內容　`time` 事件時間（HH:MM，選填）　`remind_time` 提醒時間（HH:MM，預設 22:00）　`remind_date` 提醒日期（YYYYMMDD，預設前一天）\n​',
+          value: '設定提醒，將在指定日期的指定時間發送\n`date` 事件日期（YYYYMMDD）、`message` 提醒內容、`time` 事件時間（HH:MM，選填）、`remind_time`提醒時間（HH:MM，預設 22:00）、`remind_date` 提醒日期（YYYYMMDD，預設前一天）\n​',
         },
         {
           name: '/reminders',
           value: '查看你所有待發送的提醒\n​',
         },
         {
+          name: '/reminders-range',
+          value: '查看指定事件日期區間內的提醒\n`from` 起始日期（YYYYMMDD，必填）、`to` 結束日期（YYYYMMDD，不填則只查 from 當天）\n​',
+        },
+        {
           name: '/remind-edit',
-          value: '透過 ID 編輯已設定的提醒，未填寫的欄位將保留原有值\n`id` 提醒 ID（必填）　`message` 新內容　`date` 新事件日期（YYYYMMDD）　`time` 新事件時間（HH:MM）　`remind_date` 新提醒日期（YYYYMMDD）　`remind_time` 新提醒時間（HH:MM）\n​',
+          value: '透過 ID 編輯已設定的提醒，未填寫的欄位將保留原有值\n`id` 提醒 ID（必填）、`message` 新內容、`date` 新事件日期（YYYYMMDD）、`time` 新事件時間（HH:MM）、`remind_date` 新提醒日期（YYYYMMDD）、`remind_time`、新提醒時間（HH:MM）\n​',
         },
         {
           name: '/remind-delete',
@@ -705,6 +667,21 @@ client.on('interactionCreate', async (interaction) => {
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
+  }
+}
+
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  try {
+    await handleInteraction(interaction);
+  } catch (err) {
+    console.error(`[${interaction.commandName}] 未預期錯誤：`, err);
+    const payload = { content: '❌ 發生未預期的錯誤，請稍後再試。', flags: MessageFlags.Ephemeral };
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply(payload).catch(() => {});
+    } else {
+      await interaction.reply(payload).catch(() => {});
+    }
   }
 });
 
