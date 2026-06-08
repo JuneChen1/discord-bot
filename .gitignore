@@ -7,3 +7,4 @@ reminders_export.csv
 *.log
 Thumbs.db
 .claude/settings.local.json
+.prettierrc.json

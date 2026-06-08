@@ -66,7 +66,12 @@ function parseDateUTC(str) {
 }
 
 // 回傳指定提醒日期（預設前一天）指定時間（台灣時間 UTC+8）的 UTC timestamp (ms)
-function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remindMinute = DEFAULT_REMIND_MINUTE, remindDateStr = null) {
+function calcReminderTime(
+  eventDateStr,
+  remindHour = DEFAULT_REMIND_HOUR,
+  remindMinute = DEFAULT_REMIND_MINUTE,
+  remindDateStr = null,
+) {
   if (!/^\d{8}$/.test(eventDateStr)) return null;
   let remindDay;
   if (remindDateStr) {
@@ -84,24 +89,33 @@ function calcReminderTime(eventDateStr, remindHour = DEFAULT_REMIND_HOUR, remind
 // 依事件日期區間篩選並排序（toStr 為空字串表示無上限）
 function filterRemindersByRange(reminders, userId, fromStr, toStr) {
   return reminders
-    .filter(r => r.userId === userId && r.eventDate >= fromStr && (!toStr || r.eventDate <= toStr))
+    .filter(
+      (r) => r.userId === userId && r.eventDate >= fromStr && (!toStr || r.eventDate <= toStr),
+    )
     .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
 }
 
 // 判斷 reminders 中是否已有相同使用者、日期、時間、內容、提醒設定的重複項目
-function isDuplicateReminder(reminders, { userId, eventDate, eventTime, message, remindTime, remindDate }) {
-  return reminders.some(r =>
-    r.userId === userId &&
-    r.eventDate === eventDate &&
-    r.eventTime === eventTime &&
-    r.message === message &&
-    r.remindTime === remindTime &&
-    (r.remindDate ?? '') === remindDate
+function isDuplicateReminder(
+  reminders,
+  { userId, eventDate, eventTime, message, remindTime, remindDate },
+) {
+  return reminders.some(
+    (r) =>
+      r.userId === userId &&
+      r.eventDate === eventDate &&
+      r.eventTime === eventTime &&
+      r.message === message &&
+      r.remindTime === remindTime &&
+      (r.remindDate ?? '') === remindDate,
   );
 }
 
 // 驗證提醒時間相關欄位，回傳 { error } 或 { remindTimeDisplay, remindAt }
-function validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw }, now = Date.now()) {
+function validateReminderInput(
+  { dateStr, timeStr, remindDateStr, remindTimeRaw },
+  now = Date.now(),
+) {
   const parsedRemindTime = parseRemindTime(remindTimeRaw || null);
   if (!parsedRemindTime) {
     return { error: '❌ 提醒時間格式錯誤！請使用 `HH:MM`，例如 `18:30`。' };
@@ -112,23 +126,39 @@ function validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw 
   }
 
   if (remindDateStr && remindDateStr > dateStr) {
-    return { error: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！` };
+    return {
+      error: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！`,
+    };
   }
 
   const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
 
-  if (remindDateStr && remindDateStr === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
-    return { error: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！` };
+  if (
+    remindDateStr &&
+    remindDateStr === dateStr &&
+    timeStr &&
+    toMinutes(remindTimeDisplay) >= toMinutes(timeStr)
+  ) {
+    return {
+      error: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！`,
+    };
   }
 
-  const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateStr || null);
+  const remindAt = calcReminderTime(
+    dateStr,
+    parsedRemindTime.hour,
+    parsedRemindTime.minute,
+    remindDateStr || null,
+  );
 
   if (!remindAt) {
     return { error: '❌ 日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260510`。' };
   }
 
   if (remindAt <= now) {
-    return { error: `❌ 提醒時間 ${formatTaipeiTime(remindAt)} 已過，無法設定提醒！請調整事件日期或提醒時間。` };
+    return {
+      error: `❌ 提醒時間 ${formatTaipeiTime(remindAt)} 已過，無法設定提醒！請調整事件日期或提醒時間。`,
+    };
   }
 
   return { remindTimeDisplay, remindAt };
@@ -138,9 +168,9 @@ function validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw 
 // patches 中的 key 存在表示要更新，不存在表示保留舊值
 function applyReminderEdits(existing, patches) {
   return {
-    dateStr:       'date'       in patches ? patches.date       : existing.eventDate,
-    message:       'message'    in patches ? patches.message    : existing.message,
-    timeStr:       'time'       in patches ? patches.time       : existing.eventTime,
+    dateStr: 'date' in patches ? patches.date : existing.eventDate,
+    message: 'message' in patches ? patches.message : existing.message,
+    timeStr: 'time' in patches ? patches.time : existing.eventTime,
     remindDateStr: 'remindDate' in patches ? patches.remindDate : (existing.remindDate ?? ''),
     remindTimeRaw: 'remindTime' in patches ? patches.remindTime : existing.remindTime,
   };

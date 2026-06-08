@@ -63,7 +63,7 @@ async function fireReminder(reminder) {
   try {
     activeTimers.delete(reminder.id);
     const reminders = await loadReminders();
-    await saveReminders(reminders.filter(r => r.id !== reminder.id));
+    await saveReminders(reminders.filter((r) => r.id !== reminder.id));
     const channel = client.channels.cache.get(reminder.channelId);
     if (channel) {
       const embed = new EmbedBuilder()
@@ -104,9 +104,11 @@ function cancelReminder(reminderId) {
 }
 
 function getTargetChannel(interaction) {
-  return (process.env.REMINDER_CHANNEL_ID
-    ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
-    : null) ?? interaction.channel;
+  return (
+    (process.env.REMINDER_CHANNEL_ID
+      ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
+      : null) ?? interaction.channel
+  );
 }
 
 function truncateList(lines, limit = 1000) {
@@ -140,35 +142,45 @@ const commandDefs = [
     .setName('remind')
     .setDescription('設定提醒，將在指定日期（預設事件前一天）的指定時間（預設 22:00 台灣時間）發送')
     .addStringOption((opt) =>
-      opt.setName('date').setDescription('事件日期，格式 YYYYMMDD，例如 20260510').setRequired(true)
+      opt
+        .setName('date')
+        .setDescription('事件日期，格式 YYYYMMDD，例如 20260510')
+        .setRequired(true),
+    )
+    .addStringOption((opt) => opt.setName('message').setDescription('提醒內容').setRequired(true))
+    .addStringOption((opt) =>
+      opt.setName('time').setDescription('事件時間，格式 HH:MM，例如 14:30').setRequired(false),
     )
     .addStringOption((opt) =>
-      opt.setName('message').setDescription('提醒內容').setRequired(true)
+      opt
+        .setName('remind_date')
+        .setDescription('提醒日期，格式 YYYYMMDD，預設為事件前一天')
+        .setRequired(false),
     )
     .addStringOption((opt) =>
-      opt.setName('time').setDescription('事件時間，格式 HH:MM，例如 14:30').setRequired(false)
-    )
-    .addStringOption((opt) =>
-      opt.setName('remind_date').setDescription('提醒日期，格式 YYYYMMDD，預設為事件前一天').setRequired(false)
-    )
-    .addStringOption((opt) =>
-      opt.setName('remind_time').setDescription('提醒時間，格式 HH:MM，預設 22:00（台灣時間）').setRequired(false)
+      opt
+        .setName('remind_time')
+        .setDescription('提醒時間，格式 HH:MM，預設 22:00（台灣時間）')
+        .setRequired(false),
     )
     .toJSON(),
 
-  new SlashCommandBuilder()
-    .setName('reminders')
-    .setDescription('查看你所有待發送的提醒')
-    .toJSON(),
+  new SlashCommandBuilder().setName('reminders').setDescription('查看你所有待發送的提醒').toJSON(),
 
   new SlashCommandBuilder()
     .setName('reminders-range')
     .setDescription('查看指定事件日期區間內的提醒')
     .addStringOption((opt) =>
-      opt.setName('from').setDescription('起始日期，格式 YYYYMMDD，例如 20260601').setRequired(true)
+      opt
+        .setName('from')
+        .setDescription('起始日期，格式 YYYYMMDD，例如 20260601')
+        .setRequired(true),
     )
     .addStringOption((opt) =>
-      opt.setName('to').setDescription('結束日期，格式 YYYYMMDD，例如 20260630（不填則只查 from 當天）').setRequired(false)
+      opt
+        .setName('to')
+        .setDescription('結束日期，格式 YYYYMMDD，例如 20260630（不填則只查 from 當天）')
+        .setRequired(false),
     )
     .toJSON(),
 
@@ -176,22 +188,22 @@ const commandDefs = [
     .setName('remind-edit')
     .setDescription('透過 ID 編輯已設定的提醒（至少修改一個欄位）')
     .addStringOption((opt) =>
-      opt.setName('id').setDescription('提醒 ID（可從 /reminders 查詢）').setRequired(true)
+      opt.setName('id').setDescription('提醒 ID（可從 /reminders 查詢）').setRequired(true),
     )
     .addStringOption((opt) =>
-      opt.setName('message').setDescription('新的提醒內容').setRequired(false)
+      opt.setName('message').setDescription('新的提醒內容').setRequired(false),
     )
     .addStringOption((opt) =>
-      opt.setName('date').setDescription('新的事件日期，格式 YYYYMMDD').setRequired(false)
+      opt.setName('date').setDescription('新的事件日期，格式 YYYYMMDD').setRequired(false),
     )
     .addStringOption((opt) =>
-      opt.setName('time').setDescription('新的事件時間，格式 HH:MM').setRequired(false)
+      opt.setName('time').setDescription('新的事件時間，格式 HH:MM').setRequired(false),
     )
     .addStringOption((opt) =>
-      opt.setName('remind_date').setDescription('新的提醒日期，格式 YYYYMMDD').setRequired(false)
+      opt.setName('remind_date').setDescription('新的提醒日期，格式 YYYYMMDD').setRequired(false),
     )
     .addStringOption((opt) =>
-      opt.setName('remind_time').setDescription('新的提醒時間，格式 HH:MM').setRequired(false)
+      opt.setName('remind_time').setDescription('新的提醒時間，格式 HH:MM').setRequired(false),
     )
     .toJSON(),
 
@@ -199,7 +211,10 @@ const commandDefs = [
     .setName('remind-delete')
     .setDescription('刪除待發送的提醒，支援多個 ID（空白隔開）')
     .addStringOption((opt) =>
-      opt.setName('id').setDescription('提醒 ID，多個用空白隔開（ID 可從建立時的訊息底部或 /reminders 查詢）').setRequired(true)
+      opt
+        .setName('id')
+        .setDescription('提醒 ID，多個用空白隔開（ID 可從建立時的訊息底部或 /reminders 查詢）')
+        .setRequired(true),
     )
     .toJSON(),
 
@@ -207,14 +222,14 @@ const commandDefs = [
     .setName('remind-import')
     .setDescription('從 CSV 檔案批次匯入提醒')
     .addAttachmentOption((opt) =>
-      opt.setName('file').setDescription('CSV 檔案（欄位：date, message, time, remind_time, remind_date）').setRequired(true)
+      opt
+        .setName('file')
+        .setDescription('CSV 檔案（欄位：date, message, time, remind_time, remind_date）')
+        .setRequired(true),
     )
     .toJSON(),
 
-  new SlashCommandBuilder()
-    .setName('help')
-    .setDescription('查看所有可用指令')
-    .toJSON(),
+  new SlashCommandBuilder().setName('help').setDescription('查看所有可用指令').toJSON(),
 ];
 
 client.once('clientReady', async () => {
@@ -226,16 +241,18 @@ client.once('clientReady', async () => {
     process.exit(1);
   }
   console.log(`Bot 已上線：${client.user.tag}`);
-  console.log('已註冊指令：remind, reminders, reminders-range, remind-edit, remind-delete, remind-import, help');
+  console.log(
+    '已註冊指令：remind, reminders, reminders-range, remind-edit, remind-delete, remind-import, help',
+  );
 
   // 載入並排程所有已存在的提醒，過期的直接刪除
   const reminders = await loadReminders();
   const now = Date.now();
-  const expired = reminders.filter(r => r.remindAt <= now);
-  const valid = reminders.filter(r => r.remindAt > now);
+  const expired = reminders.filter((r) => r.remindAt <= now);
+  const valid = reminders.filter((r) => r.remindAt > now);
   if (expired.length > 0) {
     await saveReminders(valid);
-    console.log(`已刪除 ${expired.length} 個過期提醒：${expired.map(r => r.message).join(', ')}`);
+    console.log(`已刪除 ${expired.length} 個過期提醒：${expired.map((r) => r.message).join(', ')}`);
   }
   valid.forEach(scheduleReminder);
   console.log(`已排程 ${valid.length} 個提醒`);
@@ -254,7 +271,12 @@ async function handleInteraction(interaction) {
     const remindDateStr = interaction.options.getString('remind_date') ?? '';
     const targetChannel = getTargetChannel(interaction);
 
-    const validated = validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw: remindTimeStr });
+    const validated = validateReminderInput({
+      dateStr,
+      timeStr,
+      remindDateStr,
+      remindTimeRaw: remindTimeStr,
+    });
     if (validated.error) {
       await interaction.reply({ content: validated.error, flags: MessageFlags.Ephemeral });
       return;
@@ -263,7 +285,14 @@ async function handleInteraction(interaction) {
 
     const reminders = await loadReminders();
 
-    const duplicate = isDuplicateReminder(reminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateStr });
+    const duplicate = isDuplicateReminder(reminders, {
+      userId,
+      eventDate: dateStr,
+      eventTime: timeStr,
+      message,
+      remindTime: remindTimeDisplay,
+      remindDate: remindDateStr,
+    });
     if (duplicate) {
       await interaction.reply({
         content: `❌ 你在 \`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同內容的提醒：「${message}」`,
@@ -300,7 +329,7 @@ async function handleInteraction(interaction) {
         { name: '📅 事件日期', value: eventDateDisplay, inline: true },
         { name: '📍 頻道', value: `<#${targetChannel.id}>`, inline: true },
         { name: '💬 內容', value: message },
-        { name: '⏰ 提醒時間', value: displayRemindTime }
+        { name: '⏰ 提醒時間', value: displayRemindTime },
       )
       .setColor(0x57f287)
       .setFooter({ text: `ID: ${id}` });
@@ -311,19 +340,20 @@ async function handleInteraction(interaction) {
 
   // ── /reminders ───────────────────────────────────────────
   if (cmd === 'reminders') {
-    const reminders = (await loadReminders()).filter(r => r.userId === userId);
+    const reminders = (await loadReminders()).filter((r) => r.userId === userId);
 
     if (reminders.length === 0) {
-      await interaction.reply({ content: '📭 你目前沒有任何待發送的提醒。', flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: '📭 你目前沒有任何待發送的提醒。',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
 
     const sorted = reminders.sort((a, b) => a.eventDate.localeCompare(b.eventDate));
     const shown = sorted.slice(0, MAX_EMBED_FIELDS);
     const overflow = sorted.length - shown.length;
-    const embed = new EmbedBuilder()
-      .setTitle('📋 你的提醒清單')
-      .setColor(0x5865f2);
+    const embed = new EmbedBuilder().setTitle('📋 你的提醒清單').setColor(0x5865f2);
 
     for (const r of shown) {
       embed.addFields(reminderToField(r));
@@ -342,27 +372,37 @@ async function handleInteraction(interaction) {
     const toStr = (interaction.options.getString('to') ?? '').trim() || fromStr;
 
     if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
-      await interaction.reply({ content: '❌ 日期格式錯誤，請使用 YYYYMMDD（例如 20260601）。', flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: '❌ 日期格式錯誤，請使用 YYYYMMDD（例如 20260601）。',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
     if (fromStr > toStr) {
-      await interaction.reply({ content: '❌ 起始日期不可晚於結束日期。', flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: '❌ 起始日期不可晚於結束日期。',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
 
-    const rangeLabel = fromStr === toStr ? formatEventDate(fromStr) : `${formatEventDate(fromStr)} ～ ${formatEventDate(toStr)}`;
+    const rangeLabel =
+      fromStr === toStr
+        ? formatEventDate(fromStr)
+        : `${formatEventDate(fromStr)} ～ ${formatEventDate(toStr)}`;
     const inRange = filterRemindersByRange(await loadReminders(), userId, fromStr, toStr);
 
     if (inRange.length === 0) {
-      await interaction.reply({ content: `📭 ${rangeLabel} 沒有任何提醒。`, flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: `📭 ${rangeLabel} 沒有任何提醒。`,
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
 
     const shown = inRange.slice(0, MAX_EMBED_FIELDS);
     const overflow = inRange.length - shown.length;
-    const embed = new EmbedBuilder()
-      .setTitle(`📋 提醒清單（${rangeLabel}）`)
-      .setColor(0x5865f2);
+    const embed = new EmbedBuilder().setTitle(`📋 提醒清單（${rangeLabel}）`).setColor(0x5865f2);
 
     for (const r of shown) {
       embed.addFields(reminderToField(r));
@@ -384,7 +424,13 @@ async function handleInteraction(interaction) {
     const newRemindDateStr = interaction.options.getString('remind_date');
     const newRemindTimeStr = interaction.options.getString('remind_time');
 
-    if (newMessage === null && newDateStr === null && newTimeStr === null && newRemindDateStr === null && newRemindTimeStr === null) {
+    if (
+      newMessage === null &&
+      newDateStr === null &&
+      newTimeStr === null &&
+      newRemindDateStr === null &&
+      newRemindTimeStr === null
+    ) {
       await interaction.reply({
         content: '❌ 請至少提供一個要修改的欄位（message、date、time、remind_date、remind_time）。',
         flags: MessageFlags.Ephemeral,
@@ -393,7 +439,7 @@ async function handleInteraction(interaction) {
     }
 
     const reminders = await loadReminders();
-    const idx = reminders.findIndex(r => r.id === targetId);
+    const idx = reminders.findIndex((r) => r.id === targetId);
 
     if (idx === -1) {
       await interaction.reply({
@@ -420,7 +466,10 @@ async function handleInteraction(interaction) {
     if (newRemindDateStr !== null) patches.remindDate = newRemindDateStr;
     if (newRemindTimeStr !== null) patches.remindTime = newRemindTimeStr;
 
-    const { dateStr, message, timeStr, remindDateStr, remindTimeRaw } = applyReminderEdits(existing, patches);
+    const { dateStr, message, timeStr, remindDateStr, remindTimeRaw } = applyReminderEdits(
+      existing,
+      patches,
+    );
 
     const validated = validateReminderInput({ dateStr, timeStr, remindDateStr, remindTimeRaw });
     if (validated.error) {
@@ -429,8 +478,17 @@ async function handleInteraction(interaction) {
     }
     const { remindTimeDisplay, remindAt } = validated;
 
-    const otherReminders = reminders.filter(r => r.id !== targetId);
-    if (isDuplicateReminder(otherReminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateStr })) {
+    const otherReminders = reminders.filter((r) => r.id !== targetId);
+    if (
+      isDuplicateReminder(otherReminders, {
+        userId,
+        eventDate: dateStr,
+        eventTime: timeStr,
+        message,
+        remindTime: remindTimeDisplay,
+        remindDate: remindDateStr,
+      })
+    ) {
       await interaction.reply({
         content: `❌ 你在 \`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同內容的提醒：「${message}」`,
         flags: MessageFlags.Ephemeral,
@@ -466,7 +524,7 @@ async function handleInteraction(interaction) {
         { name: '📅 事件日期', value: eventDateDisplay, inline: true },
         { name: '📍 頻道', value: `<#${existing.channelId}>`, inline: true },
         { name: '💬 內容', value: message },
-        { name: '⏰ 提醒時間', value: formatTaipeiTime(remindAt) }
+        { name: '⏰ 提醒時間', value: formatTaipeiTime(remindAt) },
       )
       .setColor(0x5865f2)
       .setFooter({ text: `ID: ${targetId}` });
@@ -483,7 +541,7 @@ async function handleInteraction(interaction) {
     const failed = [];
 
     for (const targetId of ids) {
-      const idx = reminders.findIndex(r => r.id === targetId);
+      const idx = reminders.findIndex((r) => r.id === targetId);
       if (idx === -1) {
         failed.push(`\`${targetId}\`：找不到此 ID，多個 ID 請用空白隔開`);
         continue;
@@ -507,9 +565,7 @@ async function handleInteraction(interaction) {
     }
 
     const color = failed.length === 0 ? 0x57f287 : deleted.length === 0 ? 0xed4245 : 0xfee75c;
-    const embed = new EmbedBuilder()
-      .setTitle('🗑️ 刪除結果')
-      .setColor(color);
+    const embed = new EmbedBuilder().setTitle('🗑️ 刪除結果').setColor(color);
 
     if (deleted.length > 0) {
       embed.addFields({ name: `✅ 已刪除 ${deleted.length} 筆`, value: truncateList(deleted) });
@@ -547,7 +603,10 @@ async function handleInteraction(interaction) {
 
     // 去掉 UTF-8 BOM（Excel 存出的 CSV 會帶這個）
     text = text.replace(/^\uFEFF/, '');
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l);
     if (lines.length === 0) {
       await interaction.editReply('❌ CSV 檔案是空的。');
       return;
@@ -592,23 +651,39 @@ async function handleInteraction(interaction) {
       }
 
       if (remindDateRaw && !/^\d{8}$/.test(remindDateRaw)) {
-        failed.push(`第 ${i + 1} 行：remind_date 格式錯誤（\`${remindDateRaw}\`），請使用 YYYYMMDD`);
+        failed.push(
+          `第 ${i + 1} 行：remind_date 格式錯誤（\`${remindDateRaw}\`），請使用 YYYYMMDD`,
+        );
         continue;
       }
 
       if (remindDateRaw && remindDateRaw > dateStr) {
-        failed.push(`第 ${i + 1} 行：提醒日期（\`${formatEventDate(remindDateRaw)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）`);
+        failed.push(
+          `第 ${i + 1} 行：提醒日期（\`${formatEventDate(remindDateRaw)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）`,
+        );
         continue;
       }
 
       const remindTimeDisplay = `${String(parsedRemindTime.hour).padStart(2, '0')}:${String(parsedRemindTime.minute).padStart(2, '0')}`;
 
-      if (remindDateRaw && remindDateRaw === dateStr && timeStr && toMinutes(remindTimeDisplay) >= toMinutes(timeStr)) {
-        failed.push(`第 ${i + 1} 行：提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）`);
+      if (
+        remindDateRaw &&
+        remindDateRaw === dateStr &&
+        timeStr &&
+        toMinutes(remindTimeDisplay) >= toMinutes(timeStr)
+      ) {
+        failed.push(
+          `第 ${i + 1} 行：提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）`,
+        );
         continue;
       }
 
-      const remindAt = calcReminderTime(dateStr, parsedRemindTime.hour, parsedRemindTime.minute, remindDateRaw || null);
+      const remindAt = calcReminderTime(
+        dateStr,
+        parsedRemindTime.hour,
+        parsedRemindTime.minute,
+        remindDateRaw || null,
+      );
       if (!remindAt) {
         failed.push(`第 ${i + 1} 行：日期格式錯誤（\`${dateStr}\`）`);
         continue;
@@ -619,9 +694,18 @@ async function handleInteraction(interaction) {
         continue;
       }
 
-      const isDuplicate = isDuplicateReminder(reminders, { userId, eventDate: dateStr, eventTime: timeStr, message, remindTime: remindTimeDisplay, remindDate: remindDateRaw });
+      const isDuplicate = isDuplicateReminder(reminders, {
+        userId,
+        eventDate: dateStr,
+        eventTime: timeStr,
+        message,
+        remindTime: remindTimeDisplay,
+        remindDate: remindDateRaw,
+      });
       if (isDuplicate) {
-        failed.push(`第 ${i + 1} 行：\`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同提醒「${message}」`);
+        failed.push(
+          `第 ${i + 1} 行：\`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同提醒「${message}」`,
+        );
         continue;
       }
 
@@ -641,21 +725,18 @@ async function handleInteraction(interaction) {
 
       reminders.push(reminder);
       toSchedule.push(reminder);
-      const eventDisplay = timeStr ? `${formatEventDate(dateStr)} ${timeStr}` : formatEventDate(dateStr);
+      const eventDisplay = timeStr
+        ? `${formatEventDate(dateStr)} ${timeStr}`
+        : formatEventDate(dateStr);
       success.push(`\`${eventDisplay}\`　${message}`);
     }
 
     await saveReminders(reminders);
     toSchedule.forEach(scheduleReminder);
 
-    const color =
-      failed.length === 0 ? 0x57f287 :
-      success.length === 0 ? 0xed4245 :
-      0xfee75c;
+    const color = failed.length === 0 ? 0x57f287 : success.length === 0 ? 0xed4245 : 0xfee75c;
 
-    const embed = new EmbedBuilder()
-      .setTitle('📥 批次匯入結果')
-      .setColor(color);
+    const embed = new EmbedBuilder().setTitle('📥 批次匯入結果').setColor(color);
 
     if (success.length > 0) {
       embed.addFields({ name: `✅ 成功 ${success.length} 筆`, value: truncateList(success) });
@@ -670,39 +751,41 @@ async function handleInteraction(interaction) {
 
   // ── /help ─────────────────────────────────────────────────
   if (cmd === 'help') {
-    const embed = new EmbedBuilder()
-      .setTitle('📖 可用指令')
-      .setColor(0x5865f2)
-      .addFields(
-        {
-          name: '/remind',
-          value: '設定提醒，將在指定日期的指定時間發送\n`date` 事件日期（YYYYMMDD）、`message` 提醒內容、`time` 事件時間（HH:MM，選填）、`remind_time`提醒時間（HH:MM，預設 22:00）、`remind_date` 提醒日期（YYYYMMDD，預設前一天）\n​',
-        },
-        {
-          name: '/reminders',
-          value: '查看你所有待發送的提醒\n（一次最多顯示 25 筆，可使用 `/reminders-range` 縮小範圍）\n​',
-        },
-        {
-          name: '/reminders-range',
-          value: '查看指定事件日期區間內的提醒\n`from` 起始日期（YYYYMMDD，必填）、`to` 結束日期（YYYYMMDD，不填則只查 from 當天）\n​',
-        },
-        {
-          name: '/remind-edit',
-          value: '透過 ID 編輯已設定的提醒，未填寫的欄位將保留原有值\n`id` 提醒 ID（必填）、`message` 新內容、`date` 新事件日期（YYYYMMDD）、`time` 新事件時間（HH:MM）、`remind_date` 新提醒日期（YYYYMMDD）、`remind_time`、新提醒時間（HH:MM）\n​',
-        },
-        {
-          name: '/remind-delete',
-          value: '刪除待發送的提醒\n`id` 提醒 ID，多個用空白隔開\n​',
-        },
-        {
-          name: '/remind-import',
-          value: '從 CSV 檔案批次匯入提醒\n`file` CSV 附件（欄位：date, message, time, remind_time, remind_date）\n​',
-        },
-        {
-          name: '/help',
-          value: '查看所有可用指令',
-        },
-      );
+    const embed = new EmbedBuilder().setTitle('📖 可用指令').setColor(0x5865f2).addFields(
+      {
+        name: '/remind',
+        value:
+          '設定提醒，將在指定日期的指定時間發送\n`date` 事件日期（YYYYMMDD）、`message` 提醒內容、`time` 事件時間（HH:MM，選填）、`remind_time`提醒時間（HH:MM，預設 22:00）、`remind_date` 提醒日期（YYYYMMDD，預設前一天）\n​',
+      },
+      {
+        name: '/reminders',
+        value:
+          '查看你所有待發送的提醒\n（一次最多顯示 25 筆，可使用 `/reminders-range` 縮小範圍）\n​',
+      },
+      {
+        name: '/reminders-range',
+        value:
+          '查看指定事件日期區間內的提醒\n`from` 起始日期（YYYYMMDD，必填）、`to` 結束日期（YYYYMMDD，不填則只查 from 當天）\n​',
+      },
+      {
+        name: '/remind-edit',
+        value:
+          '透過 ID 編輯已設定的提醒，未填寫的欄位將保留原有值\n`id` 提醒 ID（必填）、`message` 新內容、`date` 新事件日期（YYYYMMDD）、`time` 新事件時間（HH:MM）、`remind_date` 新提醒日期（YYYYMMDD）、`remind_time`、新提醒時間（HH:MM）\n​',
+      },
+      {
+        name: '/remind-delete',
+        value: '刪除待發送的提醒\n`id` 提醒 ID，多個用空白隔開\n​',
+      },
+      {
+        name: '/remind-import',
+        value:
+          '從 CSV 檔案批次匯入提醒\n`file` CSV 附件（欄位：date, message, time, remind_time, remind_date）\n​',
+      },
+      {
+        name: '/help',
+        value: '查看所有可用指令',
+      },
+    );
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
