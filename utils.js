@@ -1,3 +1,4 @@
+const { format, parse, addHours } = require('date-fns');
 const DEFAULT_REMIND_HOUR = 22;
 const DEFAULT_REMIND_MINUTE = 0;
 
@@ -10,18 +11,15 @@ function toMinutes(hhmm) {
 
 // YYYYMMDD → YYYY/MM/DD
 function formatEventDate(dateStr) {
-  return `${dateStr.slice(0, 4)}/${dateStr.slice(4, 6)}/${dateStr.slice(6, 8)}`;
+  return format(parse(dateStr, 'yyyyMMdd', new Date()), 'yyyy/MM/dd');
 }
 
 // UTC timestamp → YYYY/MM/DD HH:MM（台灣時間 UTC+8）
 function formatTaipeiTime(ts) {
-  const d = new Date(ts + 8 * 60 * 60 * 1000);
-  const YYYY = d.getUTCFullYear();
-  const MM = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const DD = String(d.getUTCDate()).padStart(2, '0');
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${YYYY}/${MM}/${DD} ${hh}:${mm}`;
+  const taipei = addHours(new Date(ts), 8);
+  // date-fns 的 format 會用 host 的 local getter 讀值，這裡先把時間平移成「local getter 讀出來等於 UTC 數值」，避免結果隨主機時區改變
+  const asLocal = new Date(taipei.getTime() + taipei.getTimezoneOffset() * 60 * 1000);
+  return format(asLocal, 'yyyy/MM/dd HH:mm');
 }
 
 // 支援帶引號欄位（欄位內含逗號時用雙引號包圍）；`""` 為引號跳脫；引號未關閉回傳 null
