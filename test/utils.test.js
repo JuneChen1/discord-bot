@@ -8,6 +8,7 @@ const {
   formatTaipeiTime,
   parseCSVLine,
   parseRemindTime,
+  getUserRemindDefault,
   calcReminderTime,
   filterRemindersByRange,
   isDuplicateReminder,
@@ -29,22 +30,31 @@ describe('filterRemindersByRange', () => {
 
   test('有 from 和 to：只回傳區間內（含邊界）', () => {
     const result = filterRemindersByRange(REMINDERS, 'u1', '20260601', '20260630');
-    assert.deepEqual(result.map(r => r.eventDate), ['20260601', '20260615', '20260630']);
+    assert.deepEqual(
+      result.map((r) => r.eventDate),
+      ['20260601', '20260615', '20260630'],
+    );
   });
 
   test('to 等於 from：只回傳當天', () => {
     const result = filterRemindersByRange(REMINDERS, 'u1', '20260615', '20260615');
-    assert.deepEqual(result.map(r => r.eventDate), ['20260615']);
+    assert.deepEqual(
+      result.map((r) => r.eventDate),
+      ['20260615'],
+    );
   });
 
   test('無上限（toStr 空字串）：回傳 from 之後所有提醒', () => {
     const result = filterRemindersByRange(REMINDERS, 'u1', '20260615', '');
-    assert.deepEqual(result.map(r => r.eventDate), ['20260615', '20260630', '20260701']);
+    assert.deepEqual(
+      result.map((r) => r.eventDate),
+      ['20260615', '20260630', '20260701'],
+    );
   });
 
   test('不同使用者的提醒不回傳', () => {
     const result = filterRemindersByRange(REMINDERS, 'u1', '20260601', '20260630');
-    assert.ok(result.every(r => r.userId === 'u1'));
+    assert.ok(result.every((r) => r.userId === 'u1'));
   });
 
   test('區間內無符合 → 空陣列', () => {
@@ -59,12 +69,18 @@ describe('filterRemindersByRange', () => {
   test('結果依 eventDate 升冪排序', () => {
     const unsorted = [r('u1', '20260630'), r('u1', '20260601'), r('u1', '20260615')];
     const result = filterRemindersByRange(unsorted, 'u1', '20260601', '20260630');
-    assert.deepEqual(result.map(r => r.eventDate), ['20260601', '20260615', '20260630']);
+    assert.deepEqual(
+      result.map((r) => r.eventDate),
+      ['20260601', '20260615', '20260630'],
+    );
   });
 
   test('跨月區間', () => {
     const result = filterRemindersByRange(REMINDERS, 'u1', '20260601', '20260701');
-    assert.deepEqual(result.map(r => r.eventDate), ['20260601', '20260615', '20260630', '20260701']);
+    assert.deepEqual(
+      result.map((r) => r.eventDate),
+      ['20260601', '20260615', '20260630', '20260701'],
+    );
   });
 });
 
@@ -123,7 +139,11 @@ describe('applyReminderEdits', () => {
   });
 
   test('同時改多個欄位', () => {
-    const result = applyReminderEdits(EXISTING, { message: '新主題', date: '20260601', remindTime: '08:00' });
+    const result = applyReminderEdits(EXISTING, {
+      message: '新主題',
+      date: '20260601',
+      remindTime: '08:00',
+    });
     assert.equal(result.message, '新主題');
     assert.equal(result.dateStr, '20260601');
     assert.equal(result.remindTimeRaw, '08:00');
@@ -152,9 +172,23 @@ describe('applyReminderEdits', () => {
 // ── isDuplicateReminder ───────────────────────────────────
 
 describe('isDuplicateReminder', () => {
-  const BASE = { userId: 'u1', eventDate: '20260510', eventTime: '14:30', message: '會議', remindTime: '22:00', remindDate: '' };
+  const BASE = {
+    userId: 'u1',
+    eventDate: '20260510',
+    eventTime: '14:30',
+    message: '會議',
+    remindTime: '22:00',
+    remindDate: '',
+  };
   const makeReminder = (overrides = {}) => ({ ...BASE, ...overrides });
-  const BASE_OPTS = { userId: 'u1', eventDate: '20260510', eventTime: '14:30', message: '會議', remindTime: '22:00', remindDate: '' };
+  const BASE_OPTS = {
+    userId: 'u1',
+    eventDate: '20260510',
+    eventTime: '14:30',
+    message: '會議',
+    remindTime: '22:00',
+    remindDate: '',
+  };
 
   test('完全相同 → true', () => {
     assert.equal(isDuplicateReminder([makeReminder()], BASE_OPTS), true);
@@ -166,22 +200,43 @@ describe('isDuplicateReminder', () => {
     assert.equal(isDuplicateReminder([makeReminder()], { ...BASE_OPTS, userId: 'u2' }), false);
   });
   test('不同 eventDate → false', () => {
-    assert.equal(isDuplicateReminder([makeReminder()], { ...BASE_OPTS, eventDate: '20260511' }), false);
+    assert.equal(
+      isDuplicateReminder([makeReminder()], { ...BASE_OPTS, eventDate: '20260511' }),
+      false,
+    );
   });
   test('不同 eventTime → false', () => {
-    assert.equal(isDuplicateReminder([makeReminder()], { ...BASE_OPTS, eventTime: '15:00' }), false);
+    assert.equal(
+      isDuplicateReminder([makeReminder()], { ...BASE_OPTS, eventTime: '15:00' }),
+      false,
+    );
   });
   test('不同 message → false', () => {
     assert.equal(isDuplicateReminder([makeReminder()], { ...BASE_OPTS, message: '其他' }), false);
   });
   test('不同 remindTime → false', () => {
-    assert.equal(isDuplicateReminder([makeReminder()], { ...BASE_OPTS, remindTime: '21:00' }), false);
+    assert.equal(
+      isDuplicateReminder([makeReminder()], { ...BASE_OPTS, remindTime: '21:00' }),
+      false,
+    );
   });
   test('有 remindDate 且相同 → true', () => {
-    assert.equal(isDuplicateReminder([makeReminder({ remindDate: '20260509' })], { ...BASE_OPTS, remindDate: '20260509' }), true);
+    assert.equal(
+      isDuplicateReminder([makeReminder({ remindDate: '20260509' })], {
+        ...BASE_OPTS,
+        remindDate: '20260509',
+      }),
+      true,
+    );
   });
   test('有 remindDate 但不同 → false', () => {
-    assert.equal(isDuplicateReminder([makeReminder({ remindDate: '20260509' })], { ...BASE_OPTS, remindDate: '20260508' }), false);
+    assert.equal(
+      isDuplicateReminder([makeReminder({ remindDate: '20260509' })], {
+        ...BASE_OPTS,
+        remindDate: '20260508',
+      }),
+      false,
+    );
   });
 });
 
@@ -244,43 +299,39 @@ describe('formatTaipeiTime', () => {
 
 describe('parseCSVLine', () => {
   test('基本三欄', () => {
-    assert.deepEqual(
-      parseCSVLine('20260510,hello,14:30'),
-      ['20260510', 'hello', '14:30']
-    );
+    assert.deepEqual(parseCSVLine('20260510,hello,14:30'), ['20260510', 'hello', '14:30']);
   });
   test('帶引號欄位（含逗號）', () => {
-    assert.deepEqual(
-      parseCSVLine('20260510,"hello, world",14:30'),
-      ['20260510', 'hello, world', '14:30']
-    );
+    assert.deepEqual(parseCSVLine('20260510,"hello, world",14:30'), [
+      '20260510',
+      'hello, world',
+      '14:30',
+    ]);
   });
   test('尾端空欄位', () => {
-    assert.deepEqual(
-      parseCSVLine('20260510,hello,,'),
-      ['20260510', 'hello', '', '']
-    );
+    assert.deepEqual(parseCSVLine('20260510,hello,,'), ['20260510', 'hello', '', '']);
   });
   test('全空欄位', () => {
     assert.deepEqual(parseCSVLine(','), ['', '']);
   });
   test('引號包圍但無逗號', () => {
-    assert.deepEqual(
-      parseCSVLine('"20260510","hello"'),
-      ['20260510', 'hello']
-    );
+    assert.deepEqual(parseCSVLine('"20260510","hello"'), ['20260510', 'hello']);
   });
   test('五欄完整格式', () => {
-    assert.deepEqual(
-      parseCSVLine('20260510,會議,14:30,21:00,20260509'),
-      ['20260510', '會議', '14:30', '21:00', '20260509']
-    );
+    assert.deepEqual(parseCSVLine('20260510,會議,14:30,21:00,20260509'), [
+      '20260510',
+      '會議',
+      '14:30',
+      '21:00',
+      '20260509',
+    ]);
   });
   test('引號內 "" 跳脫為單一引號字元', () => {
-    assert.deepEqual(
-      parseCSVLine('20260510,"say ""hi""",14:30'),
-      ['20260510', 'say "hi"', '14:30']
-    );
+    assert.deepEqual(parseCSVLine('20260510,"say ""hi""",14:30'), [
+      '20260510',
+      'say "hi"',
+      '14:30',
+    ]);
   });
   test('引號未關閉 → null', () => {
     assert.equal(parseCSVLine('20260510,"未關閉'), null);
@@ -291,10 +342,16 @@ describe('parseCSVLine', () => {
 
 describe('parseRemindTime', () => {
   test('null → 預設 22:00', () => {
-    assert.deepEqual(parseRemindTime(null), { hour: DEFAULT_REMIND_HOUR, minute: DEFAULT_REMIND_MINUTE });
+    assert.deepEqual(parseRemindTime(null), {
+      hour: DEFAULT_REMIND_HOUR,
+      minute: DEFAULT_REMIND_MINUTE,
+    });
   });
   test('空字串 → 預設 22:00', () => {
-    assert.deepEqual(parseRemindTime(''), { hour: DEFAULT_REMIND_HOUR, minute: DEFAULT_REMIND_MINUTE });
+    assert.deepEqual(parseRemindTime(''), {
+      hour: DEFAULT_REMIND_HOUR,
+      minute: DEFAULT_REMIND_MINUTE,
+    });
   });
   test('正常 HH:MM', () => {
     assert.deepEqual(parseRemindTime('18:30'), { hour: 18, minute: 30 });
@@ -322,6 +379,34 @@ describe('parseRemindTime', () => {
   });
   test('多餘字元 → null', () => {
     assert.equal(parseRemindTime('14:30:00'), null);
+  });
+  test('空值時可改用自訂預設值（個人預設提醒時間）', () => {
+    assert.deepEqual(parseRemindTime(null, 21, 0), { hour: 21, minute: 0 });
+  });
+  test('有值時忽略自訂預設值', () => {
+    assert.deepEqual(parseRemindTime('18:30', 21, 0), { hour: 18, minute: 30 });
+  });
+});
+
+// ── getUserRemindDefault ──────────────────────────────────
+
+describe('getUserRemindDefault', () => {
+  test('未設定過 → 回傳系統預設', () => {
+    assert.deepEqual(getUserRemindDefault({}, 'u1'), {
+      hour: DEFAULT_REMIND_HOUR,
+      minute: DEFAULT_REMIND_MINUTE,
+    });
+  });
+  test('已設定過 → 回傳個人設定', () => {
+    const settings = { u1: { remindHour: 21, remindMinute: 0 } };
+    assert.deepEqual(getUserRemindDefault(settings, 'u1'), { hour: 21, minute: 0 });
+  });
+  test('只回傳對應 userId 的設定，不受其他使用者影響', () => {
+    const settings = { u1: { remindHour: 21, remindMinute: 0 } };
+    assert.deepEqual(getUserRemindDefault(settings, 'u2'), {
+      hour: DEFAULT_REMIND_HOUR,
+      minute: DEFAULT_REMIND_MINUTE,
+    });
   });
 });
 

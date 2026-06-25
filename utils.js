@@ -48,15 +48,28 @@ function parseCSVLine(line) {
   return fields;
 }
 
-// 解析 "HH:MM" 字串，回傳 { hour, minute } 或 null（格式錯誤）
-function parseRemindTime(timeStr) {
-  if (!timeStr) return { hour: DEFAULT_REMIND_HOUR, minute: DEFAULT_REMIND_MINUTE };
+// 解析 "HH:MM" 字串，回傳 { hour, minute } 或 null（格式錯誤）；timeStr 為空時回傳 defaultHour/defaultMinute
+function parseRemindTime(
+  timeStr,
+  defaultHour = DEFAULT_REMIND_HOUR,
+  defaultMinute = DEFAULT_REMIND_MINUTE,
+) {
+  if (!timeStr) return { hour: defaultHour, minute: defaultMinute };
   const m = timeStr.match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return null;
   const hour = Number(m[1]);
   const minute = Number(m[2]);
   if (hour > 23 || minute > 59) return null;
   return { hour, minute };
+}
+
+// 取得使用者的個人預設提醒時間（未設定過則回傳系統預設）
+function getUserRemindDefault(settings, userId) {
+  const s = settings[userId];
+  return {
+    hour: s?.remindHour ?? DEFAULT_REMIND_HOUR,
+    minute: s?.remindMinute ?? DEFAULT_REMIND_MINUTE,
+  };
 }
 
 function parseDateUTC(str) {
@@ -111,10 +124,14 @@ function isDuplicateReminder(
 
 // 驗證提醒時間相關欄位，回傳 { error } 或 { remindTimeDisplay, remindAt }
 function validateReminderInput(
-  { dateStr, timeStr, remindDateStr, remindTimeRaw },
+  { dateStr, timeStr, remindDateStr, remindTimeRaw, defaultRemindHour, defaultRemindMinute },
   now = Date.now(),
 ) {
-  const parsedRemindTime = parseRemindTime(remindTimeRaw || null);
+  const parsedRemindTime = parseRemindTime(
+    remindTimeRaw || null,
+    defaultRemindHour,
+    defaultRemindMinute,
+  );
   if (!parsedRemindTime) {
     return { error: '❌ 提醒時間格式錯誤！請使用 `HH:MM`，例如 `18:30`。' };
   }
@@ -182,6 +199,7 @@ module.exports = {
   formatTaipeiTime,
   parseCSVLine,
   parseRemindTime,
+  getUserRemindDefault,
   calcReminderTime,
   filterRemindersByRange,
   validateReminderInput,

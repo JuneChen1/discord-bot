@@ -3,6 +3,7 @@ node_modules/
 .env.*
 !.env.example
 reminders.json
+user_settings.json
 reminders_export.csv
 *.log
 Thumbs.db
