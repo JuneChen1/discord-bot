@@ -33,7 +33,7 @@ const {
 } = require('./lib/utils');
 const { commandDefs, helpFields } = require('./lib/commands');
 const { errorMessages } = require('./lib/errorHandle');
-const { replyEphemeral } = require('./lib/replyHelpers');
+const { replyEphemeral, editReply } = require('./lib/replyHelpers');
 const {
   maxEmbedFields,
   generateReminderId,
@@ -336,10 +336,12 @@ async function handleInteraction(interaction) {
 
   // ── /reminders ───────────────────────────────────────────
   if (cmd === 'reminders') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const reminders = (await loadReminders()).filter((r) => r.userId === userId);
 
     if (reminders.length === 0) {
-      await replyEphemeral(interaction, '📭 你目前沒有任何待發送的提醒。');
+      await editReply(interaction, '📭 你目前沒有任何待發送的提醒。');
       return;
     }
 
@@ -355,21 +357,23 @@ async function handleInteraction(interaction) {
       embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
 
-    await replyEphemeral(interaction, { embeds: [embed] });
+    await editReply(interaction, { embeds: [embed] });
     return;
   }
 
   // ── /reminders-range ─────────────────────────────────────
   if (cmd === 'reminders-range') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const fromStr = interaction.options.getString('from').trim();
     const toStr = (interaction.options.getString('to') ?? '').trim() || fromStr;
 
     if (!isValidDateStr(fromStr) || !isValidDateStr(toStr)) {
-      await replyEphemeral(interaction, errorMessages.invalidDateRangeFormat);
+      await editReply(interaction, errorMessages.invalidDateRangeFormat);
       return;
     }
     if (fromStr > toStr) {
-      await replyEphemeral(interaction, errorMessages.invalidDateRangeOrder);
+      await editReply(interaction, errorMessages.invalidDateRangeOrder);
       return;
     }
 
@@ -380,7 +384,7 @@ async function handleInteraction(interaction) {
     const inRange = filterRemindersByRange(await loadReminders(), userId, fromStr, toStr);
 
     if (inRange.length === 0) {
-      await replyEphemeral(interaction, `📭 ${rangeLabel} 沒有任何提醒。`);
+      await editReply(interaction, `📭 ${rangeLabel} 沒有任何提醒。`);
       return;
     }
 
@@ -395,7 +399,7 @@ async function handleInteraction(interaction) {
       embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
 
-    await replyEphemeral(interaction, { embeds: [embed] });
+    await editReply(interaction, { embeds: [embed] });
     return;
   }
 
