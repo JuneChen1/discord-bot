@@ -29,12 +29,21 @@ const {
   calcReminderTime,
   filterRemindersByRange,
   validateReminderInput,
-  isDuplicateReminder,
   applyReminderEdits,
 } = require('./lib/utils');
 const { commandDefs, helpFields } = require('./lib/commands');
 const { errorMessages } = require('./lib/errorHandle');
 const { replyEphemeral } = require('./lib/replyHelpers');
+const {
+  maxEmbedFields,
+  generateReminderId,
+  buildReminderRecord,
+  isDuplicate,
+  buildEventDateDisplay,
+  buildReminderResultEmbed,
+  reminderToField,
+  truncateList,
+} = require('./lib/reminderHelpers');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -97,8 +106,7 @@ const withReminderLock = createMutex();
 const withUserSettingsLock = createMutex();
 
 // setTimeout 最大值約 24.8 天，超過需分段遞迴
-const MAX_TIMEOUT_MS = 2147483647;
-const MAX_EMBED_FIELDS = 25;
+const maxTimeoutMs = 2147483647;
 
 // reminder.id -> timer handle，用於取消
 const activeTimers = new Map();
@@ -130,7 +138,7 @@ async function fireReminder(reminder) {
 function scheduleReminder(reminder) {
   const delay = reminder.remindAt - Date.now();
   if (delay <= 0) return;
-  const wait = Math.min(delay, MAX_TIMEOUT_MS);
+  const wait = Math.min(delay, maxTimeoutMs);
   const handle = setTimeout(() => {
     if (wait < delay) {
       scheduleReminder(reminder);
@@ -156,30 +164,6 @@ function getTargetChannel(interaction) {
       ? client.channels.cache.get(process.env.REMINDER_CHANNEL_ID)
       : null) ?? interaction.channel
   );
-}
-
-function truncateList(lines, limit = 1000) {
-  const joined = lines.join('\n');
-  if (joined.length <= limit) return joined;
-  let result = '';
-  let shown = 0;
-  for (const line of lines) {
-    const candidate = result ? `${result}\n${line}` : line;
-    if (candidate.length > limit - 20) break;
-    result = candidate;
-    shown++;
-  }
-  return `${result}\n…等 ${lines.length - shown} 筆`;
-}
-
-function reminderToField(r) {
-  const eventDate = r.eventDate ? formatEventDate(r.eventDate) : '未知';
-  const remindTime = formatTaipeiTime(r.remindAt);
-  const eventTimeDisplay = r.eventTime ? `　🕐 ${r.eventTime}` : '';
-  return {
-    name: `📅 事件：${eventDate}${eventTimeDisplay}　⏰ 提醒：${remindTime}`,
-    value: `💬 ${r.message}\n📍 <#${r.channelId}>\n🆔 \`${r.id}\`\n​`,
-  };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -243,7 +227,7 @@ async function handleInteraction(interaction) {
     const outcome = await withReminderLock(async () => {
       const reminders = await loadReminders();
 
-      const duplicate = isDuplicateReminder(reminders, {
+      const duplicate = isDuplicate(reminders, {
         userId,
         eventDate: dateStr,
         eventTime: timeStr,
@@ -253,9 +237,8 @@ async function handleInteraction(interaction) {
       });
       if (duplicate) return { duplicate: true };
 
-      const id = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const reminder = {
-        id,
+      const reminder = buildReminderRecord({
+        id: generateReminderId(userId),
         userId,
         userName: interaction.user.username,
         channelId: targetChannel.id,
@@ -263,9 +246,9 @@ async function handleInteraction(interaction) {
         eventDate: dateStr,
         eventTime: timeStr,
         remindTime: remindTimeDisplay,
-        ...(remindDateStr ? { remindDate: remindDateStr } : {}),
+        remindDate: remindDateStr,
         remindAt,
-      };
+      });
 
       reminders.push(reminder);
       await saveReminders(reminders);
@@ -283,20 +266,16 @@ async function handleInteraction(interaction) {
     const { reminder } = outcome;
     scheduleReminder(reminder);
 
-    const displayRemindTime = formatTaipeiTime(remindAt);
-
-    const eventDateFormatted = formatEventDate(dateStr);
-    const eventDateDisplay = timeStr ? `${eventDateFormatted}　🕐 ${timeStr}` : eventDateFormatted;
-    const embed = new EmbedBuilder()
-      .setTitle('✅ 提醒已設定')
-      .addFields(
-        { name: '📅 事件日期', value: eventDateDisplay, inline: true },
-        { name: '📍 頻道', value: `<#${targetChannel.id}>`, inline: true },
-        { name: '💬 內容', value: message },
-        { name: '⏰ 提醒時間', value: displayRemindTime },
-      )
-      .setColor(0x57f287)
-      .setFooter({ text: `ID: ${reminder.id}` });
+    const embed = buildReminderResultEmbed({
+      title: '✅ 提醒已設定',
+      color: 0x57f287,
+      channelId: targetChannel.id,
+      message,
+      eventDate: dateStr,
+      eventTime: timeStr,
+      remindAt,
+      footerId: reminder.id,
+    });
 
     await replyEphemeral(interaction, { embeds: [embed] });
     return;
@@ -365,7 +344,7 @@ async function handleInteraction(interaction) {
     }
 
     const sorted = reminders.sort((a, b) => a.eventDate.localeCompare(b.eventDate));
-    const shown = sorted.slice(0, MAX_EMBED_FIELDS);
+    const shown = sorted.slice(0, maxEmbedFields);
     const overflow = sorted.length - shown.length;
     const embed = new EmbedBuilder().setTitle('📋 你的提醒清單').setColor(0x5865f2);
 
@@ -405,7 +384,7 @@ async function handleInteraction(interaction) {
       return;
     }
 
-    const shown = inRange.slice(0, MAX_EMBED_FIELDS);
+    const shown = inRange.slice(0, maxEmbedFields);
     const overflow = inRange.length - shown.length;
     const embed = new EmbedBuilder().setTitle(`📋 提醒清單（${rangeLabel}）`).setColor(0x5865f2);
 
@@ -468,7 +447,7 @@ async function handleInteraction(interaction) {
 
       const otherReminders = reminders.filter((r) => r.id !== targetId);
       if (
-        isDuplicateReminder(otherReminders, {
+        isDuplicate(otherReminders, {
           userId,
           eventDate: dateStr,
           eventTime: timeStr,
@@ -482,19 +461,18 @@ async function handleInteraction(interaction) {
 
       cancelReminder(targetId);
 
-      const updated = {
-        ...existing,
+      const updated = buildReminderRecord({
+        id: existing.id,
+        userId: existing.userId,
+        userName: existing.userName,
+        channelId: existing.channelId,
         message,
         eventDate: dateStr,
         eventTime: timeStr,
         remindTime: remindTimeDisplay,
+        remindDate: remindDateStr,
         remindAt,
-      };
-      if (remindDateStr) {
-        updated.remindDate = remindDateStr;
-      } else {
-        delete updated.remindDate;
-      }
+      });
 
       reminders[idx] = updated;
       await saveReminders(reminders);
@@ -525,20 +503,16 @@ async function handleInteraction(interaction) {
     const { updated, existing } = outcome;
     scheduleReminder(updated);
 
-    const eventDateFormatted = formatEventDate(updated.eventDate);
-    const eventDateDisplay = updated.eventTime
-      ? `${eventDateFormatted}　🕐 ${updated.eventTime}`
-      : eventDateFormatted;
-    const embed = new EmbedBuilder()
-      .setTitle('✏️ 提醒已更新')
-      .addFields(
-        { name: '📅 事件日期', value: eventDateDisplay, inline: true },
-        { name: '📍 頻道', value: `<#${existing.channelId}>`, inline: true },
-        { name: '💬 內容', value: updated.message },
-        { name: '⏰ 提醒時間', value: formatTaipeiTime(updated.remindAt) },
-      )
-      .setColor(0x5865f2)
-      .setFooter({ text: `ID: ${targetId}` });
+    const embed = buildReminderResultEmbed({
+      title: '✏️ 提醒已更新',
+      color: 0x5865f2,
+      channelId: existing.channelId,
+      message: updated.message,
+      eventDate: updated.eventDate,
+      eventTime: updated.eventTime,
+      remindAt: updated.remindAt,
+      footerId: targetId,
+    });
 
     await replyEphemeral(interaction, { embeds: [embed] });
     return;
@@ -565,11 +539,9 @@ async function handleInteraction(interaction) {
           continue;
         }
         cancelReminder(targetId);
-        const formattedDeleteDate = target.eventDate ? formatEventDate(target.eventDate) : '未知';
-        const dateDisplay = target.eventTime
-          ? `${formattedDeleteDate}　🕐 ${target.eventTime}`
-          : formattedDeleteDate;
-        deleted.push(`📅 ${dateDisplay}　💬 ${target.message}`);
+        deleted.push(
+          `📅 ${buildEventDateDisplay(target.eventDate, target.eventTime)}　💬 ${target.message}`,
+        );
         reminders.splice(idx, 1);
       }
 
@@ -731,7 +703,7 @@ async function handleInteraction(interaction) {
           continue;
         }
 
-        const isDuplicate = isDuplicateReminder(reminders, {
+        const duplicate = isDuplicate(reminders, {
           userId,
           eventDate: dateStr,
           eventTime: timeStr,
@@ -739,16 +711,15 @@ async function handleInteraction(interaction) {
           remindTime: remindTimeDisplay,
           remindDate: remindDateRaw,
         });
-        if (isDuplicate) {
+        if (duplicate) {
           failed.push(
             errorMessages.csvLineDuplicate(lineNumber, formatEventDate(dateStr), timeStr, message),
           );
           continue;
         }
 
-        const id = `${userId}-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`;
-        const reminder = {
-          id,
+        const reminder = buildReminderRecord({
+          id: generateReminderId(userId, i),
           userId,
           userName: interaction.user.username,
           channelId: targetChannel.id,
@@ -756,9 +727,9 @@ async function handleInteraction(interaction) {
           eventDate: dateStr,
           eventTime: timeStr,
           remindTime: remindTimeDisplay,
-          ...(remindDateRaw ? { remindDate: remindDateRaw } : {}),
+          remindDate: remindDateRaw,
           remindAt,
-        };
+        });
 
         reminders.push(reminder);
         toSchedule.push(reminder);
