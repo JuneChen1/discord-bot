@@ -32,6 +32,7 @@ const {
   applyReminderEdits,
 } = require('./utils');
 const { commandDefs, helpFields } = require('./commands');
+const { errorMessages } = require('./errorHandle');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -271,7 +272,7 @@ async function handleInteraction(interaction) {
 
     if (outcome.duplicate) {
       await interaction.reply({
-        content: `❌ 你在 \`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同內容的提醒：「${message}」`,
+        content: errorMessages.duplicateReminder(formatEventDate(dateStr), timeStr, message),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -306,7 +307,7 @@ async function handleInteraction(interaction) {
 
     if (timeInput && reset) {
       await interaction.reply({
-        content: '❌ `time` 和 `reset` 不能同時使用。',
+        content: errorMessages.timeAndResetConflict,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -329,7 +330,7 @@ async function handleInteraction(interaction) {
       const parsed = parseRemindTime(timeInput);
       if (!parsed) {
         await interaction.reply({
-          content: '❌ 時間格式錯誤！請使用 `HH:MM`，例如 `21:00`。',
+          content: errorMessages.invalidTimeFormat,
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -393,14 +394,14 @@ async function handleInteraction(interaction) {
 
     if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
       await interaction.reply({
-        content: '❌ 日期格式錯誤，請使用 YYYYMMDD（例如 20260601）。',
+        content: errorMessages.invalidDateRangeFormat,
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (fromStr > toStr) {
       await interaction.reply({
-        content: '❌ 起始日期不可晚於結束日期。',
+        content: errorMessages.invalidDateRangeOrder,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -452,7 +453,7 @@ async function handleInteraction(interaction) {
       newRemindTimeStr === null
     ) {
       await interaction.reply({
-        content: '❌ 請至少提供一個要修改的欄位（message、date、time、remind_date、remind_time）。',
+        content: errorMessages.noEditFieldsProvided,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -521,14 +522,14 @@ async function handleInteraction(interaction) {
 
     if (outcome.error === 'not-found') {
       await interaction.reply({
-        content: `❌ 找不到 ID 為 \`${targetId}\` 的提醒。`,
+        content: errorMessages.reminderNotFound(targetId),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (outcome.error === 'forbidden') {
       await interaction.reply({
-        content: '❌ 你只能編輯自己的提醒。',
+        content: errorMessages.notOwnerEdit,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -540,7 +541,7 @@ async function handleInteraction(interaction) {
     if (outcome.error === 'duplicate') {
       const { dateStr, timeStr, message } = outcome;
       await interaction.reply({
-        content: `❌ 你在 \`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同內容的提醒：「${message}」`,
+        content: errorMessages.duplicateReminder(formatEventDate(dateStr), timeStr, message),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -580,12 +581,12 @@ async function handleInteraction(interaction) {
       for (const targetId of ids) {
         const idx = reminders.findIndex((r) => r.id === targetId);
         if (idx === -1) {
-          failed.push(`\`${targetId}\`：找不到此 ID，多個 ID 請用空白隔開`);
+          failed.push(errorMessages.reminderNotFoundForDelete(targetId));
           continue;
         }
         const target = reminders[idx];
         if (target.userId !== userId) {
-          failed.push(`\`${targetId}\`：你只能刪除自己的提醒`);
+          failed.push(errorMessages.notOwnerDelete(targetId));
           continue;
         }
         cancelReminder(targetId);
@@ -624,7 +625,7 @@ async function handleInteraction(interaction) {
 
     if (!attachment.name.endsWith('.csv')) {
       await interaction.reply({
-        content: '❌ 請上傳 `.csv` 格式的檔案。',
+        content: errorMessages.invalidCsvFile,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -637,7 +638,7 @@ async function handleInteraction(interaction) {
       const res = await fetch(attachment.url);
       text = await res.text();
     } catch {
-      await interaction.editReply('❌ 無法讀取檔案，請稍後再試。');
+      await interaction.editReply(errorMessages.csvReadFailed);
       return;
     }
 
@@ -648,14 +649,14 @@ async function handleInteraction(interaction) {
       .map((l) => l.trim())
       .filter((l) => l);
     if (lines.length === 0) {
-      await interaction.editReply('❌ CSV 檔案是空的。');
+      await interaction.editReply(errorMessages.csvEmpty);
       return;
     }
 
     // 若第一行是 header 則跳過
     const dataLines = lines[0].toLowerCase().startsWith('date') ? lines.slice(1) : lines;
     if (dataLines.length === 0) {
-      await interaction.editReply('❌ CSV 只有 header，沒有資料列。');
+      await interaction.editReply(errorMessages.csvHeaderOnly);
       return;
     }
 
@@ -677,9 +678,10 @@ async function handleInteraction(interaction) {
       const toSchedule = [];
 
       for (let i = 0; i < dataLines.length; i++) {
+        const lineNumber = i + 1;
         const fields = parseCSVLine(dataLines[i]);
         if (fields === null) {
-          failed.push(`第 ${i + 1} 行：CSV 格式錯誤（引號未關閉）`);
+          failed.push(errorMessages.csvLineQuoteError(lineNumber));
           continue;
         }
         const dateStr = (fields[0] ?? '').trim();
@@ -689,7 +691,7 @@ async function handleInteraction(interaction) {
         const remindDateRaw = (fields[4] ?? '').trim();
 
         if (!dateStr || !message) {
-          failed.push(`第 ${i + 1} 行：缺少必要欄位（date 或 message）`);
+          failed.push(errorMessages.csvLineMissingFields(lineNumber));
           continue;
         }
 
@@ -700,20 +702,22 @@ async function handleInteraction(interaction) {
           defaults?.minute,
         );
         if (!parsedRemindTime) {
-          failed.push(`第 ${i + 1} 行：remind_time 格式錯誤（\`${remindTimeRaw}\`），請使用 HH:MM`);
+          failed.push(errorMessages.csvLineInvalidRemindTime(lineNumber, remindTimeRaw));
           continue;
         }
 
         if (remindDateRaw && !/^\d{8}$/.test(remindDateRaw)) {
-          failed.push(
-            `第 ${i + 1} 行：remind_date 格式錯誤（\`${remindDateRaw}\`），請使用 YYYYMMDD`,
-          );
+          failed.push(errorMessages.csvLineInvalidRemindDate(lineNumber, remindDateRaw));
           continue;
         }
 
         if (remindDateRaw && remindDateRaw > dateStr) {
           failed.push(
-            `第 ${i + 1} 行：提醒日期（\`${formatEventDate(remindDateRaw)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）`,
+            errorMessages.csvLineRemindDateAfterEventDate(
+              lineNumber,
+              formatEventDate(remindDateRaw),
+              formatEventDate(dateStr),
+            ),
           );
           continue;
         }
@@ -727,7 +731,12 @@ async function handleInteraction(interaction) {
           toMinutes(remindTimeDisplay) >= toMinutes(timeStr)
         ) {
           failed.push(
-            `第 ${i + 1} 行：提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）`,
+            errorMessages.csvLineRemindTimeAfterEventTime(
+              lineNumber,
+              formatEventDate(dateStr),
+              remindTimeDisplay,
+              timeStr,
+            ),
           );
           continue;
         }
@@ -739,12 +748,12 @@ async function handleInteraction(interaction) {
           remindDateRaw || null,
         );
         if (!remindAt) {
-          failed.push(`第 ${i + 1} 行：日期格式錯誤（\`${dateStr}\`）`);
+          failed.push(errorMessages.csvLineInvalidDate(lineNumber, dateStr));
           continue;
         }
 
         if (remindAt <= now) {
-          failed.push(`第 ${i + 1} 行：提醒時間已過，無法設定（\`${formatEventDate(dateStr)}\`）`);
+          failed.push(errorMessages.csvLineRemindTimeExpired(lineNumber, formatEventDate(dateStr)));
           continue;
         }
 
@@ -758,7 +767,7 @@ async function handleInteraction(interaction) {
         });
         if (isDuplicate) {
           failed.push(
-            `第 ${i + 1} 行：\`${formatEventDate(dateStr)}${timeStr ? ` ${timeStr}` : ''}\` 已有相同提醒「${message}」`,
+            errorMessages.csvLineDuplicate(lineNumber, formatEventDate(dateStr), timeStr, message),
           );
           continue;
         }
@@ -824,7 +833,7 @@ client.on('interactionCreate', async (interaction) => {
     await handleInteraction(interaction);
   } catch (err) {
     console.error(`[${interaction.commandName}] 未預期錯誤：`, err);
-    const payload = { content: '❌ 發生未預期的錯誤，請稍後再試。', flags: MessageFlags.Ephemeral };
+    const payload = { content: errorMessages.unexpectedError, flags: MessageFlags.Ephemeral };
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(payload).catch(() => {});
     } else {

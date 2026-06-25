@@ -1,4 +1,5 @@
 const { format, parse, addHours } = require('date-fns');
+const { errorMessages } = require('./errorHandle');
 const DEFAULT_REMIND_HOUR = 22;
 const DEFAULT_REMIND_MINUTE = 0;
 
@@ -133,16 +134,19 @@ function validateReminderInput(
     defaultRemindMinute,
   );
   if (!parsedRemindTime) {
-    return { error: '❌ 提醒時間格式錯誤！請使用 `HH:MM`，例如 `18:30`。' };
+    return { error: errorMessages.invalidRemindTimeFormat };
   }
 
   if (remindDateStr && !/^\d{8}$/.test(remindDateStr)) {
-    return { error: '❌ 提醒日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260509`。' };
+    return { error: errorMessages.invalidRemindDateFormat };
   }
 
   if (remindDateStr && remindDateStr > dateStr) {
     return {
-      error: `❌ 提醒日期（\`${formatEventDate(remindDateStr)}\`）不能晚於事件日期（\`${formatEventDate(dateStr)}\`）！`,
+      error: errorMessages.remindDateAfterEventDate(
+        formatEventDate(remindDateStr),
+        formatEventDate(dateStr),
+      ),
     };
   }
 
@@ -155,7 +159,11 @@ function validateReminderInput(
     toMinutes(remindTimeDisplay) >= toMinutes(timeStr)
   ) {
     return {
-      error: `❌ 提醒日期與事件同天（\`${formatEventDate(dateStr)}\`），提醒時間（\`${remindTimeDisplay}\`）不能晚於或等於事件時間（\`${timeStr}\`）！`,
+      error: errorMessages.remindTimeAfterEventTimeSameDay(
+        formatEventDate(dateStr),
+        remindTimeDisplay,
+        timeStr,
+      ),
     };
   }
 
@@ -167,13 +175,11 @@ function validateReminderInput(
   );
 
   if (!remindAt) {
-    return { error: '❌ 日期格式錯誤！請使用 `YYYYMMDD`，例如 `20260510`。' };
+    return { error: errorMessages.invalidEventDateFormat };
   }
 
   if (remindAt <= now) {
-    return {
-      error: `❌ 提醒時間 ${formatTaipeiTime(remindAt)} 已過，無法設定提醒！請調整事件日期或提醒時間。`,
-    };
+    return { error: errorMessages.remindTimeExpired(formatTaipeiTime(remindAt)) };
   }
 
   return { remindTimeDisplay, remindAt };
