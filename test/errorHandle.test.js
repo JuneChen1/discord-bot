@@ -20,6 +20,7 @@ describe('errorMessages：靜態文字', () => {
     'invalidRemindTimeFormat',
     'invalidRemindDateFormat',
     'invalidEventDateFormat',
+    'invalidEventTimeFormat',
   ];
 
   for (const key of staticKeys) {

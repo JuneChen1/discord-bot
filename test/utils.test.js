@@ -10,6 +10,7 @@ const {
   parseRemindTime,
   getUserRemindDefault,
   isValidDateStr,
+  validateDateTimeFormat,
   calcReminderTime,
   filterRemindersByRange,
   isDuplicateReminder,
@@ -261,6 +262,15 @@ describe('toMinutes', () => {
   test('格式不合 → NaN', () => {
     assert.ok(isNaN(toMinutes('invalid')));
   });
+  test('小時超過 23 → NaN', () => {
+    assert.ok(isNaN(toMinutes('24:00')));
+  });
+  test('分鐘超過 59 → NaN', () => {
+    assert.ok(isNaN(toMinutes('23:60')));
+  });
+  test('缺位分鐘（單位數）→ NaN', () => {
+    assert.ok(isNaN(toMinutes('14:3')));
+  });
 });
 
 // ── formatEventDate ───────────────────────────────────────
@@ -445,6 +455,38 @@ describe('isValidDateStr', () => {
   });
 });
 
+// ── validateDateTimeFormat ────────────────────────────────
+
+describe('validateDateTimeFormat', () => {
+  test('日期、時間皆合法 → 無 error', () => {
+    assert.deepEqual(validateDateTimeFormat('20260510', '14:30'), {});
+  });
+  test('時間為空字串 → 不檢查時間，無 error', () => {
+    assert.deepEqual(validateDateTimeFormat('20260510', ''), {});
+  });
+  test('不帶時間參數 → 不檢查時間，無 error', () => {
+    assert.deepEqual(validateDateTimeFormat('20260510'), {});
+  });
+  test('日期格式錯誤 → 回傳日期格式錯誤', () => {
+    assert.equal(
+      validateDateTimeFormat('20261301', '14:30').error,
+      errorMessages.invalidEventDateFormat,
+    );
+  });
+  test('時間格式錯誤 → 回傳時間格式錯誤', () => {
+    assert.equal(
+      validateDateTimeFormat('20260510', '25:00').error,
+      errorMessages.invalidEventTimeFormat,
+    );
+  });
+  test('日期與時間都錯誤 → 優先回傳日期格式錯誤', () => {
+    assert.equal(
+      validateDateTimeFormat('20261301', '25:00').error,
+      errorMessages.invalidEventDateFormat,
+    );
+  });
+});
+
 // ── calcReminderTime ──────────────────────────────────────
 
 describe('calcReminderTime', () => {
@@ -526,6 +568,15 @@ describe('validateReminderInput', () => {
     );
     assert.equal(result.error, undefined);
     assert.equal(result.remindTimeDisplay, '09:00');
+  });
+  test('事件時間格式錯誤 → 回傳事件時間格式錯誤', () => {
+    const result = validateReminderInput({
+      dateStr: '20260510',
+      timeStr: '25:00',
+      remindDateStr: '',
+      remindTimeRaw: '',
+    });
+    assert.equal(result.error, errorMessages.invalidEventTimeFormat);
   });
 
   describe('日期格式錯誤的判斷優先於提醒時間已過', () => {
