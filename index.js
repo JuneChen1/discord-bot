@@ -30,9 +30,10 @@ const {
   validateReminderInput,
   isDuplicateReminder,
   applyReminderEdits,
-} = require('./utils');
-const { commandDefs, helpFields } = require('./commands');
-const { errorMessages } = require('./errorHandle');
+} = require('./lib/utils');
+const { commandDefs, helpFields } = require('./lib/commands');
+const { errorMessages } = require('./lib/errorHandle');
+const { replyEphemeral } = require('./lib/replyHelpers');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -233,7 +234,7 @@ async function handleInteraction(interaction) {
       defaultRemindMinute: userDefault?.minute,
     });
     if (validated.error) {
-      await interaction.reply({ content: validated.error, flags: MessageFlags.Ephemeral });
+      await replyEphemeral(interaction, validated.error);
       return;
     }
     const { remindTimeDisplay, remindAt } = validated;
@@ -271,10 +272,10 @@ async function handleInteraction(interaction) {
     });
 
     if (outcome.duplicate) {
-      await interaction.reply({
-        content: errorMessages.duplicateReminder(formatEventDate(dateStr), timeStr, message),
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(
+        interaction,
+        errorMessages.duplicateReminder(formatEventDate(dateStr), timeStr, message),
+      );
       return;
     }
 
@@ -296,7 +297,7 @@ async function handleInteraction(interaction) {
       .setColor(0x57f287)
       .setFooter({ text: `ID: ${reminder.id}` });
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await replyEphemeral(interaction, { embeds: [embed] });
     return;
   }
 
@@ -306,10 +307,7 @@ async function handleInteraction(interaction) {
     const reset = interaction.options.getBoolean('reset') ?? false;
 
     if (timeInput && reset) {
-      await interaction.reply({
-        content: errorMessages.timeAndResetConflict,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, errorMessages.timeAndResetConflict);
       return;
     }
 
@@ -319,20 +317,17 @@ async function handleInteraction(interaction) {
         delete settings[userId];
         await saveUserSettings(settings);
       });
-      await interaction.reply({
-        content: `✅ 已重設為系統預設提醒時間：\`${String(DEFAULT_REMIND_HOUR).padStart(2, '0')}:${String(DEFAULT_REMIND_MINUTE).padStart(2, '0')}\`（台灣時間）。`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(
+        interaction,
+        `✅ 已重設為系統預設提醒時間：\`${String(DEFAULT_REMIND_HOUR).padStart(2, '0')}:${String(DEFAULT_REMIND_MINUTE).padStart(2, '0')}\`（台灣時間）。`,
+      );
       return;
     }
 
     if (timeInput) {
       const parsed = parseRemindTime(timeInput);
       if (!parsed) {
-        await interaction.reply({
-          content: errorMessages.invalidTimeFormat,
-          flags: MessageFlags.Ephemeral,
-        });
+        await replyEphemeral(interaction, errorMessages.invalidTimeFormat);
         return;
       }
       const display = `${String(parsed.hour).padStart(2, '0')}:${String(parsed.minute).padStart(2, '0')}`;
@@ -341,10 +336,10 @@ async function handleInteraction(interaction) {
         settings[userId] = { remindHour: parsed.hour, remindMinute: parsed.minute };
         await saveUserSettings(settings);
       });
-      await interaction.reply({
-        content: `✅ 你的個人預設提醒時間已設定為 \`${display}\`（台灣時間），\`/remind\` 未指定 \`remind_time\` 時將套用此設定。`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(
+        interaction,
+        `✅ 你的個人預設提醒時間已設定為 \`${display}\`（台灣時間），\`/remind\` 未指定 \`remind_time\` 時將套用此設定。`,
+      );
       return;
     }
 
@@ -352,10 +347,10 @@ async function handleInteraction(interaction) {
     const current = getUserRemindDefault(settings, userId);
     const display = `${String(current.hour).padStart(2, '0')}:${String(current.minute).padStart(2, '0')}`;
     const isCustom = Object.hasOwn(settings, userId);
-    await interaction.reply({
-      content: `⏰ 你目前的個人預設提醒時間：\`${display}\`（台灣時間）${isCustom ? '' : '　（尚未自訂，使用系統預設）'}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyEphemeral(
+      interaction,
+      `⏰ 你目前的個人預設提醒時間：\`${display}\`（台灣時間）${isCustom ? '' : '　（尚未自訂，使用系統預設）'}`,
+    );
     return;
   }
 
@@ -364,10 +359,7 @@ async function handleInteraction(interaction) {
     const reminders = (await loadReminders()).filter((r) => r.userId === userId);
 
     if (reminders.length === 0) {
-      await interaction.reply({
-        content: '📭 你目前沒有任何待發送的提醒。',
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, '📭 你目前沒有任何待發送的提醒。');
       return;
     }
 
@@ -383,7 +375,7 @@ async function handleInteraction(interaction) {
       embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await replyEphemeral(interaction, { embeds: [embed] });
     return;
   }
 
@@ -393,17 +385,11 @@ async function handleInteraction(interaction) {
     const toStr = (interaction.options.getString('to') ?? '').trim() || fromStr;
 
     if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
-      await interaction.reply({
-        content: errorMessages.invalidDateRangeFormat,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, errorMessages.invalidDateRangeFormat);
       return;
     }
     if (fromStr > toStr) {
-      await interaction.reply({
-        content: errorMessages.invalidDateRangeOrder,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, errorMessages.invalidDateRangeOrder);
       return;
     }
 
@@ -414,10 +400,7 @@ async function handleInteraction(interaction) {
     const inRange = filterRemindersByRange(await loadReminders(), userId, fromStr, toStr);
 
     if (inRange.length === 0) {
-      await interaction.reply({
-        content: `📭 ${rangeLabel} 沒有任何提醒。`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, `📭 ${rangeLabel} 沒有任何提醒。`);
       return;
     }
 
@@ -432,7 +415,7 @@ async function handleInteraction(interaction) {
       embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await replyEphemeral(interaction, { embeds: [embed] });
     return;
   }
 
@@ -452,10 +435,7 @@ async function handleInteraction(interaction) {
       newRemindDateStr === null &&
       newRemindTimeStr === null
     ) {
-      await interaction.reply({
-        content: errorMessages.noEditFieldsProvided,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, errorMessages.noEditFieldsProvided);
       return;
     }
 
@@ -521,29 +501,23 @@ async function handleInteraction(interaction) {
     });
 
     if (outcome.error === 'not-found') {
-      await interaction.reply({
-        content: errorMessages.reminderNotFound(targetId),
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, errorMessages.reminderNotFound(targetId));
       return;
     }
     if (outcome.error === 'forbidden') {
-      await interaction.reply({
-        content: errorMessages.notOwnerEdit,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, errorMessages.notOwnerEdit);
       return;
     }
     if (outcome.error === 'validation') {
-      await interaction.reply({ content: outcome.message, flags: MessageFlags.Ephemeral });
+      await replyEphemeral(interaction, outcome.message);
       return;
     }
     if (outcome.error === 'duplicate') {
       const { dateStr, timeStr, message } = outcome;
-      await interaction.reply({
-        content: errorMessages.duplicateReminder(formatEventDate(dateStr), timeStr, message),
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(
+        interaction,
+        errorMessages.duplicateReminder(formatEventDate(dateStr), timeStr, message),
+      );
       return;
     }
 
@@ -565,7 +539,7 @@ async function handleInteraction(interaction) {
       .setColor(0x5865f2)
       .setFooter({ text: `ID: ${targetId}` });
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await replyEphemeral(interaction, { embeds: [embed] });
     return;
   }
 
@@ -615,7 +589,7 @@ async function handleInteraction(interaction) {
       embed.addFields({ name: `❌ 失敗 ${failed.length} 筆`, value: truncateList(failed) });
     }
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await replyEphemeral(interaction, { embeds: [embed] });
     return;
   }
 
@@ -624,10 +598,7 @@ async function handleInteraction(interaction) {
     const attachment = interaction.options.getAttachment('file');
 
     if (!attachment.name.endsWith('.csv')) {
-      await interaction.reply({
-        content: errorMessages.invalidCsvFile,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyEphemeral(interaction, errorMessages.invalidCsvFile);
       return;
     }
 
@@ -822,7 +793,7 @@ async function handleInteraction(interaction) {
       .setColor(0x5865f2)
       .addFields(...helpFields);
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await replyEphemeral(interaction, { embeds: [embed] });
     return;
   }
 }

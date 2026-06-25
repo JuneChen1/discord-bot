@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { errorMessages } = require('../errorHandle');
+const { errorMessages } = require('../lib/errorHandle');
 
 // ── 靜態訊息 ───────────────────────────────────────────────
 
