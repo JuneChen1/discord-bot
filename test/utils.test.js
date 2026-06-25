@@ -1,19 +1,22 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  DEFAULT_REMIND_HOUR,
-  DEFAULT_REMIND_MINUTE,
+  defaultRemindHour,
+  defaultRemindMinute,
   toMinutes,
   formatEventDate,
   formatTaipeiTime,
   parseCSVLine,
   parseRemindTime,
   getUserRemindDefault,
+  isValidDateStr,
   calcReminderTime,
   filterRemindersByRange,
   isDuplicateReminder,
   applyReminderEdits,
+  validateReminderInput,
 } = require('../lib/utils');
+const { errorMessages } = require('../lib/errorHandle');
 
 // ── filterRemindersByRange ────────────────────────────────
 
@@ -343,14 +346,14 @@ describe('parseCSVLine', () => {
 describe('parseRemindTime', () => {
   test('null → 預設 22:00', () => {
     assert.deepEqual(parseRemindTime(null), {
-      hour: DEFAULT_REMIND_HOUR,
-      minute: DEFAULT_REMIND_MINUTE,
+      hour: defaultRemindHour,
+      minute: defaultRemindMinute,
     });
   });
   test('空字串 → 預設 22:00', () => {
     assert.deepEqual(parseRemindTime(''), {
-      hour: DEFAULT_REMIND_HOUR,
-      minute: DEFAULT_REMIND_MINUTE,
+      hour: defaultRemindHour,
+      minute: defaultRemindMinute,
     });
   });
   test('正常 HH:MM', () => {
@@ -393,8 +396,8 @@ describe('parseRemindTime', () => {
 describe('getUserRemindDefault', () => {
   test('未設定過 → 回傳系統預設', () => {
     assert.deepEqual(getUserRemindDefault({}, 'u1'), {
-      hour: DEFAULT_REMIND_HOUR,
-      minute: DEFAULT_REMIND_MINUTE,
+      hour: defaultRemindHour,
+      minute: defaultRemindMinute,
     });
   });
   test('已設定過 → 回傳個人設定', () => {
@@ -404,9 +407,41 @@ describe('getUserRemindDefault', () => {
   test('只回傳對應 userId 的設定，不受其他使用者影響', () => {
     const settings = { u1: { remindHour: 21, remindMinute: 0 } };
     assert.deepEqual(getUserRemindDefault(settings, 'u2'), {
-      hour: DEFAULT_REMIND_HOUR,
-      minute: DEFAULT_REMIND_MINUTE,
+      hour: defaultRemindHour,
+      minute: defaultRemindMinute,
     });
+  });
+});
+
+// ── isValidDateStr ────────────────────────────────────────
+
+describe('isValidDateStr', () => {
+  test('正常日期 → true', () => {
+    assert.equal(isValidDateStr('20260510'), true);
+  });
+  test('1 月 32 日（不存在）→ false', () => {
+    assert.equal(isValidDateStr('20270132'), false);
+  });
+  test('2 月 30 日（不存在）→ false', () => {
+    assert.equal(isValidDateStr('20260230'), false);
+  });
+  test('13 月（不存在）→ false', () => {
+    assert.equal(isValidDateStr('20261301'), false);
+  });
+  test('0 月 0 日（不存在）→ false', () => {
+    assert.equal(isValidDateStr('20260000'), false);
+  });
+  test('閏年 2/29 → true', () => {
+    assert.equal(isValidDateStr('20240229'), true);
+  });
+  test('非閏年 2/29（不存在）→ false', () => {
+    assert.equal(isValidDateStr('20230229'), false);
+  });
+  test('非 8 位數 → false', () => {
+    assert.equal(isValidDateStr('2026051'), false);
+  });
+  test('含非數字 → false', () => {
+    assert.equal(isValidDateStr('2026ABCD'), false);
   });
 });
 
@@ -446,6 +481,12 @@ describe('calcReminderTime', () => {
   test('非 8 位數 remindDateStr → null', () => {
     assert.equal(calcReminderTime('20260510', 22, 0, '202605'), null);
   });
+  test('8 位數但非真實日期的 eventDateStr（1 月 32 日）→ null', () => {
+    assert.equal(calcReminderTime('20270132'), null);
+  });
+  test('8 位數但非真實日期的 remindDateStr（2 月 30 日）→ null', () => {
+    assert.equal(calcReminderTime('20260510', 22, 0, '20260230'), null);
+  });
   test('提醒分鐘數正確對應 UTC', () => {
     const ts = calcReminderTime('20260510', 22, 30);
     assert.equal(ts, Date.UTC(2026, 4, 9, 14, 30, 0, 0));
@@ -453,5 +494,64 @@ describe('calcReminderTime', () => {
   test('remindHour < 8 隱式往前一天：台灣 02:00 = 前一天 18:00 UTC', () => {
     const ts = calcReminderTime('20260510', 2, 0);
     assert.equal(ts, Date.UTC(2026, 4, 8, 18, 0, 0, 0));
+  });
+});
+
+// ── validateReminderInput ─────────────────────────────────
+
+describe('validateReminderInput', () => {
+  test('事件日期為 8 位數但非真實日期（1 月 32 日）→ 回傳 error，不丟例外', () => {
+    const result = validateReminderInput({
+      dateStr: '20270132',
+      timeStr: '',
+      remindDateStr: '',
+      remindTimeRaw: '',
+    });
+    assert.ok(result.error);
+    assert.equal(result.remindAt, undefined);
+  });
+  test('提醒日期為 8 位數但非真實日期（2 月 30 日）→ 回傳 error', () => {
+    const result = validateReminderInput({
+      dateStr: '20260510',
+      timeStr: '',
+      remindDateStr: '20260230',
+      remindTimeRaw: '',
+    });
+    assert.ok(result.error);
+  });
+  test('正常輸入 → 回傳 remindTimeDisplay 與 remindAt', () => {
+    const result = validateReminderInput(
+      { dateStr: '20260510', timeStr: '14:30', remindDateStr: '', remindTimeRaw: '09:00' },
+      Date.UTC(2026, 0, 1),
+    );
+    assert.equal(result.error, undefined);
+    assert.equal(result.remindTimeDisplay, '09:00');
+  });
+
+  describe('日期格式錯誤的判斷優先於提醒時間已過', () => {
+    test('事件日期無效（非閏年 2/29）且明顯是過去 → 回傳日期格式錯誤，不是已過期', () => {
+      const result = validateReminderInput(
+        { dateStr: '20230229', timeStr: '', remindDateStr: '', remindTimeRaw: '' },
+        Date.UTC(2026, 0, 1),
+      );
+      assert.equal(result.error, errorMessages.invalidEventDateFormat);
+    });
+
+    test('提醒日期無效（2/30 不存在）→ 回傳提醒日期格式錯誤，不是已過期', () => {
+      const result = validateReminderInput(
+        { dateStr: '20300101', timeStr: '', remindDateStr: '20300230', remindTimeRaw: '' },
+        Date.UTC(2026, 0, 1),
+      );
+      assert.equal(result.error, errorMessages.invalidRemindDateFormat);
+    });
+
+    test('日期格式正確但確實已過期 → 才回傳已過期', () => {
+      const result = validateReminderInput(
+        { dateStr: '20200101', timeStr: '', remindDateStr: '', remindTimeRaw: '' },
+        Date.UTC(2026, 0, 1),
+      );
+      assert.match(result.error, /已過/);
+      assert.notEqual(result.error, errorMessages.invalidEventDateFormat);
+    });
   });
 });

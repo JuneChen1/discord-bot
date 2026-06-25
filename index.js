@@ -17,14 +17,15 @@ if (!process.env.DISCORD_TOKEN) {
 }
 
 const {
-  DEFAULT_REMIND_HOUR,
-  DEFAULT_REMIND_MINUTE,
+  defaultRemindHour,
+  defaultRemindMinute,
   toMinutes,
   formatEventDate,
   formatTaipeiTime,
   parseCSVLine,
   parseRemindTime,
   getUserRemindDefault,
+  isValidDateStr,
   calcReminderTime,
   filterRemindersByRange,
   validateReminderInput,
@@ -319,7 +320,7 @@ async function handleInteraction(interaction) {
       });
       await replyEphemeral(
         interaction,
-        `✅ 已重設為系統預設提醒時間：\`${String(DEFAULT_REMIND_HOUR).padStart(2, '0')}:${String(DEFAULT_REMIND_MINUTE).padStart(2, '0')}\`（台灣時間）。`,
+        `✅ 已重設為系統預設提醒時間：\`${String(defaultRemindHour).padStart(2, '0')}:${String(defaultRemindMinute).padStart(2, '0')}\`（台灣時間）。`,
       );
       return;
     }
@@ -384,7 +385,7 @@ async function handleInteraction(interaction) {
     const fromStr = interaction.options.getString('from').trim();
     const toStr = (interaction.options.getString('to') ?? '').trim() || fromStr;
 
-    if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
+    if (!isValidDateStr(fromStr) || !isValidDateStr(toStr)) {
       await replyEphemeral(interaction, errorMessages.invalidDateRangeFormat);
       return;
     }
@@ -666,6 +667,11 @@ async function handleInteraction(interaction) {
           continue;
         }
 
+        if (!isValidDateStr(dateStr)) {
+          failed.push(errorMessages.csvLineInvalidDate(lineNumber, dateStr));
+          continue;
+        }
+
         const defaults = remindTimeRaw ? null : await getUserDefault();
         const parsedRemindTime = parseRemindTime(
           remindTimeRaw || null,
@@ -677,7 +683,7 @@ async function handleInteraction(interaction) {
           continue;
         }
 
-        if (remindDateRaw && !/^\d{8}$/.test(remindDateRaw)) {
+        if (remindDateRaw && !isValidDateStr(remindDateRaw)) {
           failed.push(errorMessages.csvLineInvalidRemindDate(lineNumber, remindDateRaw));
           continue;
         }
@@ -712,16 +718,13 @@ async function handleInteraction(interaction) {
           continue;
         }
 
+        // dateStr 與 remindDateRaw（若有提供）已在上方驗證過，calcReminderTime 不會再回傳 null
         const remindAt = calcReminderTime(
           dateStr,
           parsedRemindTime.hour,
           parsedRemindTime.minute,
           remindDateRaw || null,
         );
-        if (!remindAt) {
-          failed.push(errorMessages.csvLineInvalidDate(lineNumber, dateStr));
-          continue;
-        }
 
         if (remindAt <= now) {
           failed.push(errorMessages.csvLineRemindTimeExpired(lineNumber, formatEventDate(dateStr)));
