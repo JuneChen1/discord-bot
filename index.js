@@ -17,8 +17,6 @@ if (!process.env.DISCORD_TOKEN) {
 }
 
 const {
-  defaultRemindHour,
-  defaultRemindMinute,
   toMinutes,
   formatEventDate,
   formatTaipeiTime,
@@ -31,6 +29,7 @@ const {
   validateReminderInput,
   applyReminderEdits,
 } = require('./lib/utils');
+const { defaultRemindHour, defaultRemindMinute } = require('./lib/config.json');
 const { commandDefs, helpFields } = require('./lib/commands');
 const { errorMessages } = require('./lib/errorHandle');
 const { replyEphemeral, editReply } = require('./lib/replyHelpers');
