@@ -106,6 +106,15 @@ describe('errorMessages：remindTimeExpired', () => {
   });
 });
 
+describe('errorMessages：dateRangeInPast', () => {
+  test('包含傳入的顯示日期', () => {
+    assert.equal(
+      errorMessages.dateRangeInPast('2026/05/10'),
+      '❌ 查詢區間已過期（最晚為 2026/05/10），請查詢今天或之後的日期。',
+    );
+  });
+});
+
 describe('errorMessages：CSV 逐行訊息', () => {
   test('csvLineQuoteError', () => {
     assert.equal(errorMessages.csvLineQuoteError(1), '第 1 行：CSV 格式錯誤（引號未關閉）');

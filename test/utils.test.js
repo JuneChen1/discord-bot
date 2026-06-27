@@ -4,6 +4,7 @@ const {
   toMinutes,
   formatEventDate,
   formatTaipeiTime,
+  getTaipeiDateStr,
   parseCSVLine,
   parseRemindTime,
   getUserRemindDefault,
@@ -304,6 +305,27 @@ describe('formatTaipeiTime', () => {
   test('跨月：4/30 16:00 UTC → 5/1 00:00 台灣', () => {
     const ts = Date.UTC(2026, 3, 30, 16, 0, 0, 0);
     assert.equal(formatTaipeiTime(ts), '2026/05/01 00:00');
+  });
+});
+
+// ── getTaipeiDateStr ──────────────────────────────────────
+
+describe('getTaipeiDateStr', () => {
+  test('UTC+8 偏移正確：14:00 UTC → 22:00 台灣，仍同一天', () => {
+    const ts = Date.UTC(2026, 4, 10, 14, 0, 0, 0);
+    assert.equal(getTaipeiDateStr(ts), '20260510');
+  });
+  test('跨日邊界：16:30 UTC → 隔天 00:30 台灣', () => {
+    const ts = Date.UTC(2026, 4, 10, 16, 30, 0, 0);
+    assert.equal(getTaipeiDateStr(ts), '20260511');
+  });
+  test('跨月：4/30 16:00 UTC → 5/1 台灣', () => {
+    const ts = Date.UTC(2026, 3, 30, 16, 0, 0, 0);
+    assert.equal(getTaipeiDateStr(ts), '20260501');
+  });
+  test('跨年：12/31 16:00 UTC → 隔年 1/1 台灣', () => {
+    const ts = Date.UTC(2025, 11, 31, 16, 0, 0, 0);
+    assert.equal(getTaipeiDateStr(ts), '20260101');
   });
 });
 

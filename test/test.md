@@ -115,7 +115,20 @@ npm test
 
 ### 3. `/reminders-range` — 區間查詢提醒
 
-涉及函式：`filterRemindersByRange`
+涉及函式：`filterRemindersByRange`、`getTaipeiDateStr`
+
+查詢區間若整段已過去（`to` 早於台灣時間今天），會直接回傳「查詢區間已過期」錯誤，而非顯示「沒有任何提醒」；此分支在 `to` 判定為過期後即提早 return，不會呼叫 `ctx.loadReminders()`，測試見 `remindersRange.test.js`（以假的 `interaction`／`ctx` 驗證 `editReply` 內容與 `loadReminders` 未被呼叫）。
+
+#### `getTaipeiDateStr(ts)`
+
+將 UTC timestamp 轉換為台灣時間（UTC+8）的日期字串（YYYYMMDD），用於判斷查詢區間是否已過去。
+
+| 測試案例 | UTC 輸入 | 預期結果（台灣時間） |
+|---------|----------|-------------------|
+| UTC+8 偏移正確，仍同一天 | 2026-05-10 14:00 UTC | `"20260510"` |
+| 跨日邊界 | 2026-05-10 16:30 UTC | `"20260511"` |
+| 跨月邊界 | 2026-04-30 16:00 UTC | `"20260501"` |
+| 跨年邊界 | 2025-12-31 16:00 UTC | `"20260101"` |
 
 #### `filterRemindersByRange(reminders, userId, fromStr, toStr)`
 

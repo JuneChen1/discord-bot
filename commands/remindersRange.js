@@ -1,5 +1,10 @@
 const { EmbedBuilder, MessageFlags } = require('discord.js');
-const { formatEventDate, isValidDateStr, filterRemindersByRange } = require('../lib/utils');
+const {
+  formatEventDate,
+  isValidDateStr,
+  filterRemindersByRange,
+  getTaipeiDateStr,
+} = require('../lib/utils');
 const { errorMessages } = require('../lib/errorHandle');
 const { editReply } = require('../lib/replyHelpers');
 const { maxEmbedFields, reminderToField } = require('../lib/reminderHelpers');
@@ -19,6 +24,10 @@ module.exports = {
     }
     if (fromStr > toStr) {
       await editReply(interaction, errorMessages.invalidDateRangeOrder);
+      return;
+    }
+    if (toStr < getTaipeiDateStr()) {
+      await editReply(interaction, errorMessages.dateRangeInPast(formatEventDate(toStr)));
       return;
     }
 
