@@ -1,4 +1,5 @@
 {
   "defaultRemindHour": 22,
-  "defaultRemindMinute": 0
+  "defaultRemindMinute": 0,
+  "timezoneOffsetHours": 8
 }
