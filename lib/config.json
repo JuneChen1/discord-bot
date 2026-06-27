@@ -1,5 +1,6 @@
 {
   "defaultRemindHour": 22,
   "defaultRemindMinute": 0,
-  "timezoneOffsetHours": 8
+  "timezoneOffsetHours": 8,
+  "maxRemindersDisplay": 20
 }

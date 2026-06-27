@@ -7,7 +7,7 @@ const {
 } = require('../lib/utils');
 const { errorMessages } = require('../lib/errorHandle');
 const { editReply } = require('../lib/replyHelpers');
-const { maxEmbedFields, reminderToField } = require('../lib/reminderHelpers');
+const { maxRemindersList, reminderToField } = require('../lib/reminderHelpers');
 
 module.exports = {
   name: 'reminders-range',
@@ -42,7 +42,7 @@ module.exports = {
       return;
     }
 
-    const shown = inRange.slice(0, maxEmbedFields);
+    const shown = inRange.slice(0, maxRemindersList);
     const overflow = inRange.length - shown.length;
     const embed = new EmbedBuilder().setTitle(`📋 提醒清單（${rangeLabel}）`).setColor(0x5865f2);
 

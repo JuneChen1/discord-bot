@@ -1,6 +1,6 @@
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { editReply } = require('../lib/replyHelpers');
-const { maxEmbedFields, reminderToField } = require('../lib/reminderHelpers');
+const { maxRemindersList, reminderToField } = require('../lib/reminderHelpers');
 
 module.exports = {
   name: 'reminders',
@@ -16,7 +16,7 @@ module.exports = {
     }
 
     const sorted = reminders.sort((a, b) => a.eventDate.localeCompare(b.eventDate));
-    const shown = sorted.slice(0, maxEmbedFields);
+    const shown = sorted.slice(0, maxRemindersList);
     const overflow = sorted.length - shown.length;
     const embed = new EmbedBuilder().setTitle('📋 你的提醒清單').setColor(0x5865f2);
 
