@@ -1,8 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  defaultRemindHour,
-  defaultRemindMinute,
   toMinutes,
   formatEventDate,
   formatTaipeiTime,
@@ -18,6 +16,7 @@ const {
   validateReminderInput,
 } = require('../lib/utils');
 const { errorMessages } = require('../lib/errorHandle');
+const { defaultRemindHour, defaultRemindMinute } = require('../lib/config.json');
 
 // ── filterRemindersByRange ────────────────────────────────
 
