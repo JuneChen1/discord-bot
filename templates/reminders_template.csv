@@ -1,4 +1,6 @@
-date,message,time,remind_time,remind_date
+date,message,time,remind_time,remind_date,type,remind_offset_days,end_date,count
 20260510,Team meeting,14:30,,
 20260515,Project deadline,,,
 20260520,Demo day,09:00,08:00,20260519
+20260504,Weekly sync,10:00,,,weekly,1,,8
+20260905,Monthly report,,09:00,,monthly,,20261231,

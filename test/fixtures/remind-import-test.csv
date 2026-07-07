@@ -1,4 +1,4 @@
-date,message,time,remind_time,remind_date
+date,message,time,remind_time,remind_date,type,remind_offset_days,end_date,count
 20260901,正常案例-無時間無提醒設定,,,
 20260910,正常案例-含事件時間與提醒時間,15:00,09:00,
 20260920,正常案例-自訂提醒日期,18:00,20:00,20260919
@@ -11,3 +11,13 @@ date,message,time,remind_time,remind_date
 20260905,同天提醒時間晚於事件時間,10:00,11:00,20260905
 20260101,提醒時間已過期,,09:00,20251231
 20260901,正常案例-無時間無提醒設定,,,
+20260901,週期正常案例-daily+count,,,,daily,,,3
+20260904,週期正常案例-weekly+end_date,,,,weekly,2,20261231,
+20260905,週期正常案例-monthly+offset0,09:00,08:00,,monthly,0,20270101,
+20260905,週期type格式錯誤,,,,invalid_type,,,3
+20260905,週期同時提供end_date與count,,,,daily,,20261231,3
+20260905,週期未提供end_date與count,,,,daily,,,
+20260905,週期end_date格式錯誤(7位數),,,,daily,,2026123,
+20260910,週期end_date早於事件日期,,,,daily,,20260909,
+20260905,週期count錯誤(0不合法),,,,daily,,,0
+20260905,週期offset_days錯誤(負數),,,,daily,-1,,3

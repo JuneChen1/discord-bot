@@ -178,7 +178,45 @@ npm test
 
 ---
 
-### 6. `/remind-import` — 批次匯入
+### 6. `/remind-recurring` — 週期提醒
+
+涉及函式：`addMonthsUTCClamped`、`calcNextOccurrenceDate`、`buildNextOccurrence`（其餘日期/時間驗證與 `/remind` 共用）
+
+#### `addMonthsUTCClamped(dateUTC, months)`
+
+UTC 安全的月份加法，目標月無此日時 clamp 到當月最後一天。
+
+| 測試案例 | 說明 |
+|---------|------|
+| 一般加月 | 不跨月底問題時直接加 1 個月 |
+| 大月溢位到小月 | `1/31` + 1 月 → `2/28`（平年） |
+| 閏年 2 月 | `1/31` + 1 月，閏年 → `2/29` |
+| 跨年 | `12/31` + 1 月 → 隔年 `1/31` |
+
+#### `calcNextOccurrenceDate(eventDateStr, type)`
+
+依週期類型（`daily`/`weekly`/`monthly`）計算下一場次的事件日期。
+
+| 測試案例 | 說明 |
+|---------|------|
+| daily | 事件日期 +1 天 |
+| weekly | 事件日期 +7 天，星期幾不變 |
+| monthly | 事件日期 +1 個月，含月底溢位處理 |
+
+#### `buildNextOccurrence(reminder)`
+
+計算週期提醒的下一場次，或在已達結束條件時回傳 `null`（系列結束）。
+
+| 測試案例 | 說明 |
+|---------|------|
+| 一般情況 | 回傳下一場次，`eventDate` 依 `type` 推進，`occurrenceIndex` +1 |
+| 達到 endDate | 下一場次事件日期超過 `endDate` → 回傳 `null` |
+| 達到 endCount | 下一場次序號超過 `endCount` → 回傳 `null` |
+| remindOffsetDays 位移 | 下一場次的 `remindDate` 正確依原有偏移天數位移 |
+
+---
+
+### 7. `/remind-import` — 批次匯入
 
 涉及函式：`parseCSVLine`、`isDuplicateReminder`（其餘與 `/remind` 共用）
 
@@ -199,11 +237,16 @@ npm test
 
 #### 手動驗收用 CSV fixture
 
-`test/fixtures/remind-import-test.csv` 是給 `/remind-import` 手動測試用的範例附件，內含 4 筆會成功匯入的案例與 8 筆分別觸發不同錯誤訊息的案例（缺欄位、日期格式錯誤、提醒時間格式錯誤、提醒日期格式錯誤、提醒日期晚於事件日期、同天提醒時間晚於事件時間、提醒時間已過期、重複提醒）。直接把這個檔案當附件丟給 `/remind-import` 即可驗證所有分支。
+`test/fixtures/remind-import-test.csv` 是給 `/remind-import` 手動測試用的範例附件，內含：
+
+- 一般提醒：4 筆成功案例與 8 筆分別觸發不同錯誤訊息的案例（缺欄位、日期格式錯誤、提醒時間格式錯誤、提醒日期格式錯誤、提醒日期晚於事件日期、同天提醒時間晚於事件時間、提醒時間已過期、重複提醒）。
+- 週期提醒（`type` 欄位有值）：3 筆成功案例（`daily`+`count`、`weekly`+`end_date`、`monthly`+`remind_offset_days=0`）與 7 筆分別觸發不同錯誤訊息的案例（`type` 格式錯誤、同時提供 `end_date` 與 `count`、兩者都未提供、`end_date` 格式錯誤、`end_date` 早於事件日期、`count` 不合法、`remind_offset_days` 為負數）。
+
+直接把這個檔案當附件丟給 `/remind-import` 即可驗證所有分支。
 
 ---
 
-### 7. `/help` — 查看說明
+### 8. `/help` — 查看說明
 
 本指令為靜態訊息輸出，無純函式邏輯，不需單元測試。
 

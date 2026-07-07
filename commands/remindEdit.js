@@ -82,6 +82,7 @@ module.exports = {
         remindTime: remindTimeDisplay,
         remindDate: remindDateStr,
         remindAt,
+        recurrence: existing.recurrence,
       });
 
       reminders[idx] = updated;

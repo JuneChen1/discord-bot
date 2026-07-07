@@ -19,6 +19,7 @@ if (!process.env.DISCORD_TOKEN) {
 const { commandDefs } = require('./lib/commands');
 const { errorMessages } = require('./lib/errorHandle');
 const { commands } = require('./commands');
+const { buildNextOccurrence } = require('./lib/reminderHelpers');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -88,12 +89,11 @@ const activeTimers = new Map();
 
 // 排程觸發（內部呼叫，非使用者指令）
 async function fireReminder(reminder) {
+  activeTimers.delete(reminder.id);
+
+  // 發送本次提醒訊息獨立於下方「計算/儲存下一場次」之外，
+  // 避免週期提醒的續期邏輯出錯時（例如 reminders.json 被手動編輯出不合法的 recurrence.type）連本次通知都發不出去
   try {
-    activeTimers.delete(reminder.id);
-    await withReminderLock(async () => {
-      const reminders = await loadReminders();
-      await saveReminders(reminders.filter((r) => r.id !== reminder.id));
-    });
     const channel = client.channels.cache.get(reminder.channelId);
     if (channel) {
       const embed = new EmbedBuilder()
@@ -107,6 +107,27 @@ async function fireReminder(reminder) {
   } catch (err) {
     console.error(`[fireReminder] 提醒 ${reminder.id} 發送失敗：`, err);
   }
+
+  let nextReminder = null;
+  try {
+    await withReminderLock(async () => {
+      const reminders = await loadReminders();
+      const remaining = reminders.filter((r) => r.id !== reminder.id);
+      if (reminder.recurrence) {
+        try {
+          nextReminder = buildNextOccurrence(reminder);
+        } catch (err) {
+          console.error(`[fireReminder] 週期提醒 ${reminder.id} 計算下一場次失敗，系列將終止：`, err);
+          nextReminder = null;
+        }
+      }
+      await saveReminders(nextReminder ? [...remaining, nextReminder] : remaining);
+    });
+  } catch (err) {
+    console.error(`[fireReminder] 提醒 ${reminder.id} 更新儲存失敗：`, err);
+  }
+
+  if (nextReminder) scheduleReminder(nextReminder);
 }
 
 // 啟動時、/remind、/remind-import

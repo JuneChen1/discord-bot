@@ -5,6 +5,7 @@ const remindersRange = require('./remindersRange');
 const remindEdit = require('./remindEdit');
 const remindDelete = require('./remindDelete');
 const remindImport = require('./remindImport');
+const remindRecurring = require('./remindRecurring');
 const help = require('./help');
 
 const commandModules = [
@@ -15,6 +16,7 @@ const commandModules = [
   remindEdit,
   remindDelete,
   remindImport,
+  remindRecurring,
   help,
 ];
 
