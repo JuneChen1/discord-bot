@@ -6,7 +6,7 @@ const {
   parseDateUTC,
   formatDateStrUTC,
 } = require('../lib/utils');
-const { buildNextOccurrence } = require('../lib/reminderHelpers');
+const { buildNextOccurrence, computeRemainingOccurrences } = require('../lib/reminderHelpers');
 
 // ── addMonthsUTCClamped ────────────────────────────────
 
@@ -101,5 +101,71 @@ describe('buildNextOccurrence', () => {
     };
     const next = buildNextOccurrence(reminder);
     assert.equal(next.remindDate, '20260508');
+  });
+});
+
+// ── computeRemainingOccurrences ────────────────────────────────
+
+describe('computeRemainingOccurrences', () => {
+  test('endCount：回傳 endCount - occurrenceIndex + 1', () => {
+    const recurrence = {
+      type: 'weekly',
+      endDate: null,
+      endCount: 5,
+      occurrenceIndex: 2,
+    };
+    assert.equal(computeRemainingOccurrences(recurrence, '20260504'), 4);
+  });
+
+  test('endCount：最後一次時剩 1', () => {
+    const recurrence = {
+      type: 'weekly',
+      endDate: null,
+      endCount: 3,
+      occurrenceIndex: 3,
+    };
+    assert.equal(computeRemainingOccurrences(recurrence, '20260518'), 1);
+  });
+
+  test('endDate：依週期類型推算直到超過 endDate 為止的場次數（含本場）', () => {
+    const recurrence = {
+      type: 'weekly',
+      endDate: '20260525',
+      endCount: null,
+      occurrenceIndex: 1,
+    };
+    // 20260504 -> 20260511 -> 20260518 -> 20260525，皆未超過 endDate，共 4 場
+    assert.equal(computeRemainingOccurrences(recurrence, '20260504'), 4);
+  });
+
+  test('endDate：下一場已超過 endDate → 只剩本場 1 次', () => {
+    const recurrence = {
+      type: 'daily',
+      endDate: '20260504',
+      endCount: null,
+      occurrenceIndex: 1,
+    };
+    assert.equal(computeRemainingOccurrences(recurrence, '20260504'), 1);
+  });
+
+  test('monthly + endDate：逐月推算（含跨月 clamp）直到超過 endDate 為止的場次數', () => {
+    const recurrence = {
+      type: 'monthly',
+      endDate: '20260430',
+      endCount: null,
+      occurrenceIndex: 1,
+    };
+    // 20260131 -> 20260228（clamp）-> 20260331 -> 20260430，皆未超過 endDate，共 4 場
+    assert.equal(computeRemainingOccurrences(recurrence, '20260131'), 4);
+  });
+
+  test('資料異常：endCount 與 endDate 皆缺 → 回傳 null，不會無窮迴圈', () => {
+    const recurrence = {
+      type: 'daily',
+      endDate: null,
+      endCount: null,
+      occurrenceIndex: 1,
+    };
+    assert.equal(computeRemainingOccurrences(recurrence, '20260504'), null);
   });
 });
