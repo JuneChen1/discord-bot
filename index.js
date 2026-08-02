@@ -20,6 +20,7 @@ const { commandDefs } = require('./lib/commands');
 const { errorMessages } = require('./lib/errorHandle');
 const { commands } = require('./commands');
 const { buildNextOccurrence } = require('./lib/reminderHelpers');
+const { createMutex } = require('./lib/mutex');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -63,19 +64,6 @@ async function loadUserSettings() {
 
 async function saveUserSettings(settings) {
   await fs.promises.writeFile(USER_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
-}
-
-// 序列化同一檔案的「讀取→修改→寫入」流程，避免並發指令互相覆蓋對方的寫入
-function createMutex() {
-  let queue = Promise.resolve();
-  return function withLock(fn) {
-    const run = queue.then(fn, fn);
-    queue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
-  };
 }
 
 const withReminderLock = createMutex();
