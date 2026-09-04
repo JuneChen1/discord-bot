@@ -23,6 +23,7 @@ const { buildNextOccurrence } = require('./lib/reminderHelpers');
 const { createMutex } = require('./lib/mutex');
 const { createReminderToken } = require('./lib/webToken');
 const { startWebServer } = require('./lib/webServer');
+const { defaultWebPort } = require('./lib/config.json');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -148,7 +149,7 @@ function cancelReminder(reminderId) {
 function getPublicBaseUrl() {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
   if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
-  return `http://localhost:${process.env.PORT || 3000}`;
+  return `http://localhost:${process.env.PORT || defaultWebPort}`;
 }
 
 // /reminders 指令用來附上唯讀網頁版連結

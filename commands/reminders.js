@@ -27,7 +27,7 @@ module.exports = {
       embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
     embed.addFields({
-      name: '​',
+      name: '\u200b',
       value: `🔗 完整清單：[點此查看](${ctx.buildReminderWebUrl(userId, interaction.user.username)})`,
     });
 
