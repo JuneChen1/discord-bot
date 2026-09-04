@@ -26,6 +26,10 @@ module.exports = {
     if (overflow > 0) {
       embed.setFooter({ text: `尚有 ${overflow} 筆未顯示` });
     }
+    embed.addFields({
+      name: '​',
+      value: `🔗 完整清單：[點此查看](${ctx.buildReminderWebUrl(userId, interaction.user.username)})`,
+    });
 
     await editReply(interaction, { embeds: [embed] });
   },

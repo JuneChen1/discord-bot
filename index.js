@@ -21,6 +21,8 @@ const { errorMessages } = require('./lib/errorHandle');
 const { commands } = require('./commands');
 const { buildNextOccurrence } = require('./lib/reminderHelpers');
 const { createMutex } = require('./lib/mutex');
+const { createReminderToken } = require('./lib/webToken');
+const { startWebServer } = require('./lib/webServer');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -142,6 +144,18 @@ function cancelReminder(reminderId) {
   }
 }
 
+// 對外網址：優先用 PUBLIC_BASE_URL，其次 Railway 自動注入的 RAILWAY_PUBLIC_DOMAIN，本機測試則退回 localhost
+function getPublicBaseUrl() {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  return `http://localhost:${process.env.PORT || 3000}`;
+}
+
+// /reminders 指令用來附上唯讀網頁版連結
+function buildReminderWebUrl(userId, userName) {
+  return `${getPublicBaseUrl()}/reminders?token=${createReminderToken(userId, userName)}`;
+}
+
 function getTargetChannel(interaction) {
   return (
     (process.env.REMINDER_CHANNEL_ID
@@ -196,7 +210,10 @@ const ctx = {
   scheduleReminder,
   cancelReminder,
   getTargetChannel,
+  buildReminderWebUrl,
 };
+
+startWebServer(ctx);
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;

@@ -79,6 +79,7 @@
 
 - 一次最多顯示 20 筆（可透過 `lib/config.json` 的 `maxRemindersDisplay` 調整，上限為 Discord 硬限制 25 筆）。若超出上限，請改用 `/reminders-range` 縮小範圍。
 - 週期性提醒會在列表前方標示 🔁 符號（例如：`🔁 每週一`）。
+- 回覆最後會附上一個**唯讀網頁版連結**，可看到你個人完整的提醒清單（不受 20 筆上限限制）。連結內含簽章 token，僅該使用者本人可查看，7 天後失效（重新執行指令即可取得新連結）。
 
 #### 📅 `/reminders-range` (區間查詢)
 
@@ -117,6 +118,8 @@
    DISCORD_TOKEN=你的_Discord_Bot_Token
    REMINDER_CHANNEL_ID=（選填）固定發送提醒的頻道_ID
    DATA_DIR=（選填）資料儲存路徑
+   WEB_TOKEN_SECRET=（選填但建議填寫）網頁版連結簽章密鑰，未設定則每次重啟都會讓舊連結失效
+   PUBLIC_BASE_URL=（選填）網頁版連結的網域，部署在 Railway 且已開啟 Networking 網域時可不填（會自動偵測）
    ```
 2. **安裝相依套件與啟動服務**
 
@@ -138,3 +141,4 @@
   * **使用者設定**：個人預設時間儲存於同一目錄下的 `user_settings.json`。
 * **固定頻道發送**：預設狀況下，提醒會發送到當初執行建立指令的文字頻道。若在 `.env` 中設定了 `REMINDER_CHANNEL_ID`，則不論在哪裡建立指令，**所有提醒一律會導向該固定頻道**。
 * **手動操作**：如果你需要大量且複雜的排程，亦可在關閉 Bot 的狀態下直接手動編輯 `reminders.json`，其欄位與匯入 CSV 一致，重啟 Bot 後排程便會自動生效。
+* **提醒網頁版**：Bot 會額外啟動一個 HTTP server（監聽 `PORT`，預設 `3000`），提供 `/reminders` 唯讀網頁版連結（見上方 `/reminders` 指令說明）。若部署在 Railway，到專案設定的 **Networking → Generate Domain** 開啟公開網域即可讓連結生效，不需要另外申請網域或設定 HTTPS。
