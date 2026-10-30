@@ -7,7 +7,7 @@
     "test": "node --test test/utils.test.js test/errorHandle.test.js test/replyHelpers.test.js test/remindersRange.test.js test/reminderRecurring.test.js test/mutex.test.js test/webToken.test.js test/reminderWebPage.test.js test/reminderCsv.test.js test/webServer.test.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24.22.0 <25"
   },
   "dependencies": {
     "date-fns": "^4.4.0",
